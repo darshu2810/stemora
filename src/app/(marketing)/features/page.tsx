@@ -16,54 +16,54 @@ export const metadata: Metadata = { title: "Features — STEMORA" };
 const FEATURES = [
   {
     icon: Users,
-    tag: "MEMBERS",
-    title: "Member management",
+    tag: "STUDENTS",
+    title: "Student roster",
     description:
-      "One roster for every club in your school. Invite students, assign club roles, and see who's active at a glance.",
+      "One roster for the whole STEM Club. Invite students by school email, filter by grade, and see every project a student is on.",
   },
   {
     icon: FolderKanban,
     tag: "PROJECTS",
     title: "Projects & boards",
     description:
-      "A home for every build, with a drag-and-drop board that tracks it from backlog to done.",
+      "Each project has a category, a team, a project leader, a deadline, and a drag-and-drop board that tracks it from backlog to done.",
   },
   {
     icon: Trophy,
     tag: "COMPETITIONS",
     title: "Competition register",
     description:
-      "Track every competition your clubs enter — level, roster, date, and result — in one place instead of a spreadsheet.",
+      "Every competition the club enters — level, roster, date, and result — in one place instead of a spreadsheet.",
   },
   {
     icon: CalendarDays,
     tag: "EVENTS",
     title: "Events",
-    description: "Club meetings and school-wide events on one schedule, with RSVP counts built in.",
+    description: "Meetings, workshops, showcases, and competition days on one schedule, with attendance built in.",
   },
   {
     icon: Library,
     tag: "RESOURCES",
     title: "Resource library",
-    description: "Rulebooks, protocols, and starter kits stay with the club instead of in someone's inbox.",
+    description: "Guides, rulebooks, and datasheets filed by category so a student can find them without asking.",
   },
   {
     icon: Megaphone,
     tag: "ANNOUNCEMENTS",
     title: "Announcements",
-    description: "Reach one club or the whole school, with the important notices pinned to the top.",
+    description: "One message reaches every student in the club, with the important notices pinned to the top.",
   },
   {
     icon: Award,
     tag: "PROFILE",
     title: "Student profiles",
-    description: "A real record for every student: skills, badges, and the projects they actually shipped.",
+    description: "A real record for every student: skills, certificates, club awards, and the projects they actually shipped.",
   },
   {
     icon: ShieldCheck,
     tag: "ACCESS",
-    title: "Role-based access",
-    description: "Every role — student to school admin — sees exactly what it should, and nothing more.",
+    title: "Three roles, no more",
+    description: "Platform Owner, School Admin, Student. Each sees exactly what it should, and nothing more.",
   },
 ];
 
@@ -73,12 +73,12 @@ export default function FeaturesPage() {
       <div className="max-w-2xl">
         <p className="font-mono text-xs uppercase tracking-wider text-primary">Features</p>
         <h1 className="mt-3 font-display text-4xl font-semibold tracking-tight">
-          Everything it takes to run your STEM clubs.
+          Everything it takes to run your STEM Club.
         </h1>
         <p className="mt-4 text-muted-foreground">
-          No more piecing together a shared drive, a group chat, and three spreadsheets. STEMORA
-          gives your school one workspace for every club — isolated per school and permissioned by
-          role.
+          No more piecing together a shared drive, a group chat, and three spreadsheets. Your school
+          gets one workspace for its STEM Club — isolated from every other school and permissioned
+          by role.
         </p>
       </div>
 

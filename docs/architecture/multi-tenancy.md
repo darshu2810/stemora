@@ -46,8 +46,8 @@ invisible to everything downstream.
 2. **JWT claims, not request params.** `school_id` for RLS purposes never
    comes from a URL param, request body, or header set by the client — only
    from the signed JWT, populated server-side by the custom access token
-   hook at sign-in/refresh/school-switch. A malicious client editing
-   `clubId` in a request cannot make the database believe it belongs to a
+   hook at sign-in and refresh. A malicious client editing a `school_id`
+   in a request cannot make the database believe the row belongs to a
    different school.
 3. **Server-side query scoping (defense in depth, not the boundary).** Every
    `features/*/server/queries.ts` / `actions.ts` function still explicitly
@@ -56,9 +56,9 @@ invisible to everything downstream.
    too, and so query plans benefit from the index even before RLS filters.
 4. **Storage isolation.** See below.
 5. **Background jobs / Edge Functions.** Any function operating across
-   schools (digest emails, Stripe webhook processing) uses the Supabase
-   service role key deliberately and loops per-school explicitly — it must
-   never share a single unscoped query across tenants.
+   schools (invitation and reminder emails) uses the Supabase service role
+   key deliberately and loops per-school explicitly — it must never share a
+   single unscoped query across tenants.
 
 ## Storage isolation
 
@@ -69,8 +69,8 @@ segment, and storage policies mirror the RLS pattern:
 {bucket}/{school_id}/{owner_type}/{owner_id}/{filename}
 ```
 
-Buckets: `avatars` (public read, school-scoped write), `materials`,
-`submissions`, `wiki-attachments`, `logos` (public read). Storage RLS
+Buckets: `avatars` (public read, school-scoped write), `resources`,
+`logos` (public read). Storage RLS
 policies check `storage.foldername(name)[1] = current_school_id()::text` plus
 the same role checks as the corresponding `file_objects` row.
 

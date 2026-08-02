@@ -57,7 +57,7 @@ export default function NewSchoolPage() {
               <FormItem>
                 <FormLabel>School name</FormLabel>
                 <FormControl>
-                  <Input placeholder="Riverside High School" {...field} />
+                  <Input placeholder="GMIS Jakarta" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -70,7 +70,7 @@ export default function NewSchoolPage() {
               <FormItem>
                 <FormLabel>Your full name</FormLabel>
                 <FormControl>
-                  <Input placeholder="Dr. Lena Ortiz" {...field} />
+                  <Input placeholder="Ms. Priya Menon" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -83,7 +83,7 @@ export default function NewSchoolPage() {
               <FormItem>
                 <FormLabel>Work email</FormLabel>
                 <FormControl>
-                  <Input type="email" placeholder="lena.ortiz@riverside.edu" {...field} />
+                  <Input type="email" placeholder="priya.menon@gmis.sch.id" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

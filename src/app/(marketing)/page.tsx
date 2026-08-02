@@ -11,19 +11,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/shared/container";
 import { NetworkHero } from "@/components/marketing/network-hero";
+import { ALL_ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS } from "@/config/roles";
 
 const PILLARS = [
   {
     icon: Users,
-    tag: "MEMBERS",
-    title: "Members",
-    description: "One roster across every club — invite students, assign club roles, and see who's actually showing up.",
+    tag: "STUDENTS",
+    title: "Students",
+    description: "One roster for the whole club — invite students, see who's active, and see what each of them is working on.",
   },
   {
     icon: FolderKanban,
     tag: "PROJECTS",
     title: "Projects & boards",
-    description: "Every build gets a home, with a drag-and-drop board for the robotics build, the science fair entry, the hackathon sprint.",
+    description: "Every build gets a team, a category, a deadline, and a board that tracks it from backlog to done.",
   },
   {
     icon: Trophy,
@@ -35,25 +36,20 @@ const PILLARS = [
     icon: CalendarDays,
     tag: "EVENTS",
     title: "Events",
-    description: "Club meetings and school-wide events on one schedule, with RSVPs built in.",
+    description: "Meetings, workshops, showcases, and competition days on one schedule the whole club can see.",
   },
   {
     icon: Library,
     tag: "RESOURCES",
     title: "Resources",
-    description: "Rulebooks, protocols, and starter kits that stay with the club instead of in someone's inbox.",
+    description: "Rulebooks, guides, and starter kits that stay with the club instead of in someone's inbox.",
   },
   {
     icon: Megaphone,
     tag: "ANNOUNCEMENTS",
     title: "Announcements",
-    description: "Reach one club or the whole school, with the notices that matter pinned to the top.",
+    description: "Reach every student in the club at once, with the notices that matter pinned to the top.",
   },
-];
-
-const ROLES = [
-  { role: "School Admin", detail: "Full control of your school's workspace, members, and settings." },
-  { role: "Student", detail: "One place for meetings, builds, deadlines, and the people doing it with you." },
 ];
 
 export default function MarketingHomePage() {
@@ -67,11 +63,11 @@ export default function MarketingHomePage() {
               STEMORA / STEM CLUB MANAGEMENT
             </p>
             <h1 className="mt-4 font-display text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">
-              One workspace for all your school&apos;s STEM clubs.
+              One workspace for your school&apos;s STEM Club.
             </h1>
             <p className="mt-5 max-w-lg text-base text-muted-foreground sm:text-lg">
-              Members, projects, competitions, events, resources, and announcements — built for how
-              STEM clubs actually run, in a secure workspace that belongs to your school alone.
+              Students, projects, competitions, events, resources, and announcements — built for how
+              a school STEM Club actually runs, in a secure workspace that belongs to your school alone.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Button
@@ -99,7 +95,7 @@ export default function MarketingHomePage() {
           <div className="max-w-2xl">
             <p className="font-mono text-xs uppercase tracking-wider text-primary">Six tools, one hub</p>
             <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight">
-              Everything your clubs need, nothing you have to stitch together.
+              Everything the club needs, nothing you have to stitch together.
             </h2>
           </div>
           <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -127,16 +123,20 @@ export default function MarketingHomePage() {
       <section className="border-b border-border py-20">
         <Container>
           <div className="max-w-2xl">
-            <p className="font-mono text-xs uppercase tracking-wider text-primary">Built for every role</p>
+            <p className="font-mono text-xs uppercase tracking-wider text-primary">Three roles, no more</p>
             <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight">
               The right view for whoever&apos;s logged in.
             </h2>
+            <p className="mt-4 text-muted-foreground">
+              Platform Owner, School Admin, Student. A student leading a project leads that project —
+              it doesn&apos;t change their account.
+            </p>
           </div>
-          <div className="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
-            {ROLES.map((r) => (
-              <div key={r.role} className="bg-card p-6">
-                <h3 className="font-display font-semibold">{r.role}</h3>
-                <p className="mt-1.5 text-sm text-muted-foreground">{r.detail}</p>
+          <div className="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
+            {ALL_ROLES.map((role) => (
+              <div key={role} className="bg-card p-6">
+                <h3 className="font-display font-semibold">{ROLE_LABELS[role]}</h3>
+                <p className="mt-1.5 text-sm text-muted-foreground">{ROLE_DESCRIPTIONS[role]}</p>
               </div>
             ))}
           </div>
@@ -146,7 +146,7 @@ export default function MarketingHomePage() {
       <section className="py-24">
         <Container className="flex flex-col items-center rounded-2xl border border-border bg-secondary/40 px-8 py-16 text-center">
           <h2 className="max-w-xl font-display text-3xl font-semibold tracking-tight">
-            Give your STEM club a real home.
+            Give your STEM Club a real home.
           </h2>
           <p className="mt-3 max-w-md text-muted-foreground">
             Free to start. Your school gets its own secure, isolated workspace in minutes.

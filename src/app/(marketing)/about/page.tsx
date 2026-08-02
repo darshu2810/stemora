@@ -13,19 +13,19 @@ export default function AboutPage() {
         </h1>
         <div className="mt-6 space-y-4 text-muted-foreground">
           <p>
-            Most school software is built around courses and semesters. STEM clubs don&apos;t run on
-            that schedule — they run on build seasons, competition deadlines, and whoever shows up
-            to the meeting that week.
+            Most school software is built around courses and semesters. A STEM Club doesn&apos;t run on
+            that schedule — it runs on build seasons, competition deadlines, and whoever shows up to
+            the meeting that week.
           </p>
           <p>
-            STEMORA gives every club its own workspace inside a secure, isolated school
-            environment: a classroom for assignments, a project space for the actual build, a
-            channel for the group chat that used to live in five different apps, and a profile
-            that follows a student past graduation.
+            So STEMORA is built around one thing: a school&apos;s STEM Club. One school, one club, one
+            roster. Every project, competition, resource, event, and announcement belongs to that
+            club, which is why there is never a question about where something lives or who can see
+            it.
           </p>
           <p>
-            We&apos;re building this as infrastructure for STEM education at global scale — every
-            school gets the same tools, isolated from every other school, permissioned by role,
+            We&apos;re starting with a single pilot school and growing from there. Every school that
+            joins gets the same workspace, isolated from every other school, permissioned by role,
             and fast enough to use in a 45-minute meeting.
           </p>
         </div>

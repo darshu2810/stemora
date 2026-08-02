@@ -1,14 +1,24 @@
 import { notFound } from "next/navigation";
-import { mockProjects, mockMembers, getProjectBoard } from "@/lib/mock-data";
+import { projectById, mockStudents, getProjectBoard } from "@/lib/mock-data";
 import { ProjectBoardClient } from "@/components/projects/project-board-client";
 
 export default async function StudentProjectBoardPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
-  const project = mockProjects.find((p) => p.id === projectId);
+  const project = projectById(projectId);
   if (!project) notFound();
 
-  const roster = mockMembers.filter((m) => m.clubId === project.clubId);
-  const board = getProjectBoard(project.id);
+  const team = project.memberIds
+    .map((id) => mockStudents.find((s) => s.id === id))
+    .filter((s): s is NonNullable<typeof s> => Boolean(s));
 
-  return <ProjectBoardClient project={project} initialColumns={board} roster={roster.length ? roster : mockMembers.slice(0, 5)} />;
+  // Students move their own tasks across the board but don't add or delete
+  // them — that stays with the School Admin.
+  return (
+    <ProjectBoardClient
+      project={project}
+      initialColumns={getProjectBoard(project.id)}
+      team={team}
+      canManage={false}
+    />
+  );
 }

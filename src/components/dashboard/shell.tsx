@@ -10,6 +10,7 @@ import { SidebarNav } from "@/components/dashboard/sidebar-nav";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { platformNav, schoolNav, studentNav } from "@/config/navigation";
+import type { UserRole } from "@/config/roles";
 
 // Icon components can't cross the server/client boundary as props (they're
 // functions), so this Client Component owns the nav-config import itself —
@@ -19,6 +20,13 @@ const NAV_BY_VARIANT = {
   school: schoolNav,
   student: studentNav,
 } as const;
+
+// The surface you are on decides who you are signed in as.
+const ROLE_BY_VARIANT: Record<keyof typeof NAV_BY_VARIANT, UserRole> = {
+  platform: "platform_owner",
+  school: "school_admin",
+  student: "student",
+};
 
 export function DashboardShell({
   variant,
@@ -31,6 +39,7 @@ export function DashboardShell({
 }) {
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const navItems = NAV_BY_VARIANT[variant];
+  const role = ROLE_BY_VARIANT[variant];
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -78,7 +87,7 @@ export function DashboardShell({
           <div className="flex items-center gap-1">
             <ThemeToggle />
             <NotificationBell />
-            <PersonaSwitcher />
+            <PersonaSwitcher role={role} />
           </div>
         </header>
 

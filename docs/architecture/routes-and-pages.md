@@ -1,96 +1,86 @@
 # Routes & Pages
 
-Tenant resolution is subdomain-based (`riverside.stemora.com`), decided in
-[multi-tenancy.md](multi-tenancy.md#tenant-resolution). Route groups below map
-to `src/app/(group)/...`. Every page listed ships with loading/empty/error
-states, permission checks, and responsive layout per `stemora.md`.
+Tenant resolution is subdomain-based (`gmis.stemora.com`), decided in
+[multi-tenancy.md](multi-tenancy.md#tenant-resolution). Every route below is a
+page that exists and works today — there are no feature flags, parked routes,
+or placeholder screens in the app.
 
-Legend: **Roles** = who can view (⚙ = can also configure). PO=platform_owner,
-SA=school_admin, S=student. (platform_owner is STEMORA staff, not a school member.)
+Legend: PO=platform_owner, SA=school_admin, S=student.
 
-## `(marketing)` — public, no subdomain, `stemora.com`
+## `(marketing)` — public
 
 | Route | Purpose |
 |---|---|
 | `/` | Landing page |
 | `/features` | Feature tour |
-| `/pricing` | Plans (Phase 5, ties to `subscription_plans`) |
-| `/security` | Trust/security page (SOC2 posture, data handling) |
 | `/about` | Story/mission |
-| `/contact` | Contact / sales form |
-| `/schools/new` | School signup — creates `schools` row + first `school_admin` |
-| `/legal/terms`, `/legal/privacy` | Legal |
+| `/contact` | Contact form |
 
-## `(auth)` — `stemora.com` and `{slug}.stemora.com`
+## `(auth)`
 
 | Route | Purpose | Roles |
 |---|---|---|
-| `/login` | Email/password + OAuth | all |
-| `/signup` | Only reachable via `/schools/new` (admin) or invitation token | — |
-| `/forgot-password`, `/reset-password` | Password recovery | all |
-| `/verify-email` | Post-signup verification gate | all |
-| `/invite/[token]` | Accept invitation → creates `school_members` row | invited user |
-| `/onboarding` | Multi-step: profile, role-specific fields, first club join | all, first login |
+| `/login` | Sign in. Carries the demo persona picker until Supabase Auth lands. | all |
+| `/forgot-password` | Password recovery | all |
+| `/schools/new` | School registration — creates the `schools` row, its one STEM Club, and the first `school_admin` | — |
 
-## `(app)` — authenticated, tenant-scoped, `{slug}.stemora.com`
+Planned, not yet built: `/invite/[token]` (accept a student invitation) and
+`/reset-password`.
 
-| Route | Purpose | Roles |
-|---|---|---|
-| `/dashboard` | Role-aware home: for students—my assignments/clubs; for admins—school pulse | all |
-| `/clubs` | Directory of clubs in this school, search + filter by category | all |
-| `/clubs/new` | Create club | SA, O ⚙ |
-| `/clubs/[clubId]` | Club overview: pinned announcements, activity feed, quick links | members |
-| `/clubs/[clubId]/members` | Member list, roles, invite | members (⚙ club leader) |
-| `/clubs/[clubId]/announcements` | Announcement feed | members |
-| `/clubs/[clubId]/classroom` | Assignments list | members |
-| `/clubs/[clubId]/classroom/assignments/[assignmentId]` | Assignment detail + submission | members (⚙ T/M/O) |
-| `/clubs/[clubId]/classroom/assignments/[assignmentId]/submissions` | Grading queue | T, M, O ⚙ |
-| `/clubs/[clubId]/classroom/materials` | Shared resources/files | members |
-| `/clubs/[clubId]/projects` | Project spaces list | members |
-| `/clubs/[clubId]/projects/[projectId]` | Kanban board + files | members |
-| `/clubs/[clubId]/channels` | Channel list (sidebar layout) | members |
-| `/clubs/[clubId]/channels/[channelId]` | Channel chat | members |
-| `/clubs/[clubId]/wiki` | Wiki page tree | members |
-| `/clubs/[clubId]/wiki/[pageId]` | Wiki page editor/viewer | members (⚙ editors) |
-| `/clubs/[clubId]/settings` | Club settings, archive, danger zone | O ⚙, SA ⚙ |
-| `/people` | School-wide member directory (LinkedIn-like) | all |
-| `/people/[userId]` | Public profile: bio, skills, achievements, clubs | all |
-| `/calendar` | School-wide calendar, merges club events | all |
-| `/messages` | Direct messages inbox | all |
-| `/messages/[threadId]` | DM thread | participants |
-| `/notifications` | Notification center | all |
-| `/search` | Global search (clubs, people, assignments, messages) | all |
-| `/settings/profile` | Account settings | all |
-| `/settings/school` | School branding, domain, integrations, danger zone | SA ⚙ |
-| `/settings/school/members` | School-wide member management, bulk invite | SA ⚙ |
-| `/settings/school/billing` | Subscription, invoices (Phase 5) | SA ⚙ |
-| `/settings/school/audit-log` | Tenant audit log viewer | SA |
-
-## `(platform-admin)` — `admin.stemora.com`, `platform_owner` only
+## `/platform` — `platform_owner` only
 
 | Route | Purpose |
 |---|---|
-| `/admin` | Cross-tenant dashboard: total schools, MRR, active users |
-| `/admin/schools` | All schools, search/filter, status |
-| `/admin/schools/[schoolId]` | School detail: members, plan, impersonate-for-support (audited) |
-| `/admin/billing` | Stripe overview, plan management |
-| `/admin/analytics` | Platform-wide usage (PostHog rollups) |
-| `/admin/audit-logs` | `platform_audit_logs` viewer |
-| `/admin/feature-flags` | Rollout controls per school/plan |
-| `/admin/support` | Support ticket queue (Phase 5+) |
+| `/platform/dashboard` | The schools on STEMORA, with student and project counts. No access to a school's internal data. |
+
+## `/school` — `school_admin`
+
+Everything here is scoped to the school's one STEM Club.
+
+| Route | Purpose |
+|---|---|
+| `/school/dashboard` | Club pulse: students, active projects, competitions, upcoming events, pinned announcements, pending tasks, recent activity |
+| `/school/students` | The club roster — invite, filter by grade, open a student to see their projects |
+| `/school/projects` | Every project, filtered by status and category |
+| `/school/projects/[projectId]` | Project detail: progress, deadline, team, and the kanban board |
+| `/school/competitions` | Competition register — entries, rosters, levels, results |
+| `/school/events` | Meetings, workshops, showcases, competition days; upcoming and past |
+| `/school/resources` | Files and links, filed by category |
+| `/school/announcements` | Post to the whole club, pin what matters |
+| `/school/settings` | School name, STEM Club name, district, and the three roles |
+
+## `/student` — `student`
+
+| Route | Purpose |
+|---|---|
+| `/student/dashboard` | My tasks, my projects, upcoming events, latest announcement, achievements, my competitions |
+| `/student/projects` | The projects I'm on |
+| `/student/projects/[projectId]` | The same project board, read-mostly: I move my tasks, I don't add or delete them |
+| `/student/tasks` | Every task assigned to me, across projects |
+| `/student/competitions` | The club's competition register (read-only) |
+| `/student/events` | The club's schedule (read-only) |
+| `/student/resources` | The club's library (read-only) |
+| `/student/announcements` | The club's announcements (read-only) |
+| `/student/achievements` | Club awards earned and still to earn |
+| `/student/profile` | Bio, skills, certificates, awards, and projects shipped |
+
+The `/school` and `/student` surfaces share one component per feature
+(`CompetitionsView`, `SchoolEventsView`, `ResourceLibraryView`,
+`AnnouncementsView`, `ProjectBoardClient`), with a `canManage` prop deciding
+whether the create/edit affordances render. One implementation, two audiences —
+which is why the two sides can never drift apart.
 
 ## Shared chrome
 
-- **Sidebar** (per school): Dashboard, Clubs, People, Calendar, Messages,
-  Notifications, Settings — items conditionally rendered by role via
-  `config/navigation.ts`, but every underlying route is still enforced
-  server-side regardless of what the sidebar shows.
-- **Topbar**: school switcher (if user belongs to >1 school), global search,
-  notification bell, avatar menu.
+- **Sidebar** — `config/navigation.ts` defines one list per audience
+  (`platformNav`, `schoolNav`, `studentNav`). Every entry resolves to a real
+  page; the server check on each route is what actually enforces access.
+- **Topbar** — theme toggle, notification bell, persona menu. The persona menu
+  stands in for real auth until Supabase Auth lands.
 
 ## Error/edge routes
 
-`not-found.tsx` (per route group, styled), `error.tsx` (per route group),
-`/unauthorized` (403 — wrong role for an otherwise-valid route),
+`not-found.tsx` (per route group, styled) and `error.tsx` (per route group).
+Planned: `/unauthorized` (403 — wrong role for an otherwise-valid route) and
 `/school-suspended` (tenant status gate, shown by middleware when
 `schools.status != 'active'`).

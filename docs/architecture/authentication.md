@@ -115,9 +115,10 @@ built-in leaked-password protection (enable in Supabase Auth settings).
 Role-specific multi-step wizard (`features/auth/components/OnboardingWizard`):
 
 1. Confirm name, avatar.
-2. Role-specific fields: students → grade level; school admins → department.
-3. Suggested clubs to join (based on category interests selected).
-4. Land on `/dashboard`.
+2. Role-specific fields: students → grade level; School Admins → the STEM
+   Club's name.
+3. Land on the dashboard for their role. A student is already in the school's
+   STEM Club — there is only one, so there is nothing to choose.
 
 Every step is skippable but re-prompted (non-blocking banner) until complete,
 never a blocking modal the user can't escape.

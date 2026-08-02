@@ -20,7 +20,7 @@ import { Container } from "@/components/shared/container";
 const contactSchema = z.object({
   name: z.string().min(2, "Enter your full name"),
   email: z.email("Enter a valid email"),
-  school: z.string().min(2, "Enter your school or organization"),
+  school: z.string().min(2, "Enter your school name"),
   message: z.string().min(10, "Tell us a bit more — at least 10 characters"),
 });
 
@@ -33,7 +33,7 @@ export default function ContactPage() {
   });
 
   function onSubmit(values: ContactValues) {
-    // No backend yet — this page is UI-only until Phase 5 (billing/support intake).
+    // No backend yet — this page is UI-only until the Supabase backend lands.
     console.log("contact form submission", values);
     toast.success("Message sent. We'll get back to you within a day.");
     form.reset();
@@ -57,7 +57,7 @@ export default function ContactPage() {
                 <FormItem>
                   <FormLabel>Full name</FormLabel>
                   <FormControl>
-                    <Input placeholder="Dr. Lena Ortiz" {...field} />
+                    <Input placeholder="Ms. Priya Menon" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -70,7 +70,7 @@ export default function ContactPage() {
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="lena.ortiz@school.edu" {...field} />
+                    <Input type="email" placeholder="priya.menon@gmis.sch.id" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -81,9 +81,9 @@ export default function ContactPage() {
               name="school"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>School or organization</FormLabel>
+                  <FormLabel>School</FormLabel>
                   <FormControl>
-                    <Input placeholder="Riverside High School" {...field} />
+                    <Input placeholder="GMIS Jakarta" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

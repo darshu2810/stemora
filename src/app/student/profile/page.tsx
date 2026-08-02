@@ -6,17 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import {
-  Mail,
-  Link2,
-  Globe,
-  MapPin,
-  Plus,
-  X,
-  Award,
-  ShieldCheck,
-  GraduationCap,
-} from "lucide-react";
+import { Mail, MapPin, Plus, X, Award, FolderKanban, GraduationCap, Star } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,17 +28,29 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import {
+  mockSchool,
   mockUsers,
-  mockStudentProfiles,
-  mockStudentSkills,
-  mockStudentCertificates,
-  mockStudentLeadership,
-  mockStudentAchievements,
+  mockProfiles,
+  mockSkills,
+  mockCertificates,
+  mockAchievements,
+  projectsForStudent,
+  studentById,
   BADGE_DEFS,
   type Skill,
 } from "@/lib/mock-data";
+
+// Base UI renders the raw value in a Select trigger unless the root is given
+// an `items` map, so every Select whose label differs from its value gets one.
+const PROFICIENCY_LABELS: Record<string, string> = {
+  "1": "Beginner",
+  "2": "Developing",
+  "3": "Competent",
+  "4": "Advanced",
+  "5": "Expert",
+};
 
 const skillSchema = z.object({
   name: z.string().min(2, "Enter a skill name"),
@@ -59,12 +61,13 @@ type SkillValues = z.infer<typeof skillSchema>;
 
 export default function StudentProfilePage() {
   const student = mockUsers.student;
-  const profile = mockStudentProfiles[student.id];
-  const [skills, setSkills] = React.useState<Skill[]>(mockStudentSkills[student.id] ?? []);
+  const record = studentById(student.id);
+  const profile = mockProfiles[student.id];
+  const [skills, setSkills] = React.useState<Skill[]>(mockSkills[student.id] ?? []);
   const [open, setOpen] = React.useState(false);
-  const certificates = mockStudentCertificates[student.id] ?? [];
-  const leadership = mockStudentLeadership[student.id] ?? [];
-  const achievements = mockStudentAchievements[student.id] ?? [];
+  const certificates = mockCertificates[student.id] ?? [];
+  const achievements = mockAchievements[student.id] ?? [];
+  const projects = projectsForStudent(student.id);
 
   const form = useForm<SkillValues>({
     resolver: zodResolver(skillSchema),
@@ -99,28 +102,14 @@ export default function StudentProfilePage() {
           </div>
           <h1 className="mt-4 font-display text-xl font-semibold">{student.name}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{profile.headline}</p>
-          <p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
-            <MapPin className="size-3.5" /> {profile.location}
-          </p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <a href={`mailto:${profile.links.email}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-              <Mail className="size-4" /> Email
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1"><MapPin className="size-3.5" /> {profile.location}</span>
+            {record ? <span>Joined the club {formatDate(record.joinedAt)}</span> : null}
+          </div>
+          <div className="mt-4">
+            <a href={`mailto:${profile.email}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+              <Mail className="size-4" /> {profile.email}
             </a>
-            {profile.links.github ? (
-              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <Link2 className="size-4" /> {profile.links.github}
-              </span>
-            ) : null}
-            {profile.links.linkedin ? (
-              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <Link2 className="size-4" /> {profile.links.linkedin}
-              </span>
-            ) : null}
-            {profile.links.website ? (
-              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <Globe className="size-4" /> {profile.links.website}
-              </span>
-            ) : null}
           </div>
         </div>
       </div>
@@ -140,7 +129,7 @@ export default function StudentProfilePage() {
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Add a skill</DialogTitle>
-                    <DialogDescription>Shows up here and on your public portfolio.</DialogDescription>
+                    <DialogDescription>Shows up on your STEM Club profile.</DialogDescription>
                   </DialogHeader>
                   <Form {...form}>
                     <form onSubmit={form.handleSubmit(addSkill)} className="space-y-4">
@@ -151,7 +140,7 @@ export default function StudentProfilePage() {
                           <FormItem>
                             <FormLabel>Skill</FormLabel>
                             <FormControl>
-                              <Input placeholder="ROS2" {...field} />
+                              <Input placeholder="3D printing" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -164,7 +153,7 @@ export default function StudentProfilePage() {
                           <FormItem>
                             <FormLabel>Category</FormLabel>
                             <FormControl>
-                              <Input placeholder="Programming" {...field} />
+                              <Input placeholder="Hardware" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -176,18 +165,16 @@ export default function StudentProfilePage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Proficiency</FormLabel>
-                            <Select value={field.value} onValueChange={field.onChange}>
+                            <Select items={PROFICIENCY_LABELS} value={field.value} onValueChange={field.onChange}>
                               <FormControl>
                                 <SelectTrigger className="w-full">
                                   <SelectValue />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="1">Beginner</SelectItem>
-                                <SelectItem value="2">Developing</SelectItem>
-                                <SelectItem value="3">Competent</SelectItem>
-                                <SelectItem value="4">Advanced</SelectItem>
-                                <SelectItem value="5">Expert</SelectItem>
+                                {Object.entries(PROFICIENCY_LABELS).map(([value, label]) => (
+                                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -234,19 +221,28 @@ export default function StudentProfilePage() {
           </section>
 
           <section className="rounded-xl border border-border bg-card p-5">
-            <h2 className="font-display font-semibold">Leadership roles</h2>
-            <div className="mt-4 space-y-5">
-              {leadership.map((role) => (
-                <div key={role.id} className="flex gap-3">
+            <h2 className="font-display font-semibold">Projects</h2>
+            <div className="mt-4 space-y-4">
+              {projects.map((p) => (
+                <Link key={p.id} href={`/student/projects/${p.id}`} className="flex gap-3">
                   <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <ShieldCheck className="size-4.5" strokeWidth={1.75} />
+                    <FolderKanban className="size-4.5" strokeWidth={1.75} />
                   </div>
                   <div>
-                    <p className="text-sm font-medium">{role.title}</p>
-                    <p className="text-xs text-muted-foreground">{role.org} · {role.period}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{role.description}</p>
+                    <p className="flex items-center gap-1.5 text-sm font-medium">
+                      {p.name}
+                      {p.leaderId === student.id ? (
+                        <span className="flex items-center gap-0.5 text-xs font-normal text-primary">
+                          <Star className="size-3 fill-primary" /> Project leader
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {p.category} · started {formatDate(p.startedAt)}
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">{p.description}</p>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </section>
@@ -255,7 +251,7 @@ export default function StudentProfilePage() {
         <div className="space-y-6">
           <section className="rounded-xl border border-border bg-card p-5">
             <div className="flex items-center justify-between">
-              <h2 className="font-display font-semibold">Badges</h2>
+              <h2 className="font-display font-semibold">Achievements</h2>
               <Link href="/student/achievements" className="text-xs font-medium text-primary hover:underline">View all</Link>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -278,11 +274,17 @@ export default function StudentProfilePage() {
                   <GraduationCap className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                   <div>
                     <p className="text-sm font-medium">{c.title}</p>
-                    <p className="text-xs text-muted-foreground">{c.issuer} · {c.date}</p>
+                    <p className="text-xs text-muted-foreground">{c.issuer} · {formatDate(c.date)}</p>
                   </div>
                 </div>
               ))}
             </div>
+          </section>
+
+          <section className="rounded-xl border border-border bg-card p-5">
+            <h2 className="font-display font-semibold">Club</h2>
+            <p className="mt-2 text-sm">{mockSchool.clubName}</p>
+            <p className="text-xs text-muted-foreground">{mockSchool.name} · {mockSchool.district}</p>
           </section>
         </div>
       </div>

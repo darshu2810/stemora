@@ -7,7 +7,7 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { Plus, Library, FileText, Link2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
-import { ClubFilter } from "@/components/shared/club-filter";
+import { CategoryFilter, ALL_CATEGORIES } from "@/components/shared/category-filter";
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,39 +29,55 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { mockResources as initialResources, mockClubs, mockUsers, type Resource, type ResourceType } from "@/lib/mock-data";
+import { formatDate } from "@/lib/utils";
+import {
+  mockResources as initialResources,
+  mockSchool,
+  mockUsers,
+  RESOURCE_CATEGORIES,
+  DEMO_TODAY,
+  type Resource,
+  type ResourceCategory,
+  type ResourceType,
+} from "@/lib/mock-data";
+
+const TYPE_LABELS: Record<string, string> = { link: "Link", file: "File" };
 
 const resourceSchema = z.object({
   title: z.string().min(2, "Enter a title"),
   type: z.custom<ResourceType>(),
-  clubId: z.string().optional(),
-  meta: z.string().min(2, "Enter a link or file note"),
+  category: z.custom<ResourceCategory>(),
+  meta: z.string().min(2, "Enter a link or file size"),
 });
 type ResourceValues = z.infer<typeof resourceSchema>;
 
-export function ResourceLibraryView({ eyebrow, canManage }: { eyebrow: string; canManage: boolean }) {
+/**
+ * The STEM Club's shared library. Resources belong to the club; the category
+ * mirrors the project categories so a student can find the electronics notes
+ * without there being an electronics club.
+ */
+export function ResourceLibraryView({ canManage }: { canManage: boolean }) {
   const [resources, setResources] = React.useState<Resource[]>(initialResources);
-  const [clubFilter, setClubFilter] = React.useState("all");
+  const [category, setCategory] = React.useState<string>(ALL_CATEGORIES);
   const [open, setOpen] = React.useState(false);
 
   const form = useForm<ResourceValues>({
     resolver: zodResolver(resourceSchema),
-    defaultValues: { title: "", type: "link", meta: "" },
+    defaultValues: { title: "", type: "link", category: "General", meta: "" },
   });
 
-  const filtered = resources.filter((r) => clubFilter === "all" || r.club === mockClubs.find((c) => c.id === clubFilter)?.name);
+  const filtered = resources.filter((r) => category === ALL_CATEGORIES || r.category === category);
 
   function onAdd(values: ResourceValues) {
-    const club = mockClubs.find((c) => c.id === values.clubId);
     setResources((prev) => [
       {
         id: `res_new_${prev.length}_${values.title.length}`,
         title: values.title,
-        club: club?.name ?? null,
+        category: values.category,
         type: values.type,
         meta: values.meta,
         uploadedBy: mockUsers.school_admin.name,
-        date: new Date().toISOString().slice(0, 10),
+        date: DEMO_TODAY,
       },
       ...prev,
     ]);
@@ -88,25 +104,25 @@ export function ResourceLibraryView({ eyebrow, canManage }: { eyebrow: string; c
         </div>
       ),
     },
-    { key: "club", header: "Club", render: (r) => r.club ?? "School-wide" },
+    { key: "category", header: "Category", render: (r) => r.category },
     { key: "uploadedBy", header: "Uploaded by", render: (r) => r.uploadedBy },
-    { key: "date", header: "Date", render: (r) => r.date, className: "text-muted-foreground" },
+    { key: "date", header: "Date", render: (r) => formatDate(r.date), className: "text-muted-foreground" },
   ];
 
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow={eyebrow}
-        title="Resource library"
-        description="Shared files and links for every club."
+        eyebrow={mockSchool.clubName}
+        title="Resources"
+        description={`${resources.length} files and links shared with the club.`}
         actions={
           canManage ? (
             <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger render={<Button><Plus className="size-4" /> Add resource</Button>} />
+              <DialogTrigger render={<Button><Plus className="size-4" /> Upload Resource</Button>} />
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Add a resource</DialogTitle>
-                  <DialogDescription>Files can&apos;t be uploaded yet in preview mode — add a link or a placeholder note.</DialogDescription>
+                  <DialogTitle>Upload a resource</DialogTitle>
+                  <DialogDescription>Share a file or a link with everyone in the STEM Club.</DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(onAdd)} className="space-y-4">
@@ -123,27 +139,52 @@ export function ResourceLibraryView({ eyebrow, canManage }: { eyebrow: string; c
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={form.control}
-                      name="type"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Type</FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger className="w-full">
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="link">Link</SelectItem>
-                              <SelectItem value="file">File</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="type"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Type</FormLabel>
+                            <Select items={TYPE_LABELS} value={field.value} onValueChange={field.onChange}>
+                              <FormControl>
+                                <SelectTrigger className="w-full">
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {Object.entries(TYPE_LABELS).map(([value, label]) => (
+                                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="category"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Category</FormLabel>
+                            <Select value={field.value} onValueChange={field.onChange}>
+                              <FormControl>
+                                <SelectTrigger className="w-full">
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {RESOURCE_CATEGORIES.map((c) => (
+                                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                     <FormField
                       control={form.control}
                       name="meta"
@@ -151,36 +192,14 @@ export function ResourceLibraryView({ eyebrow, canManage }: { eyebrow: string; c
                         <FormItem>
                           <FormLabel>Link or file size</FormLabel>
                           <FormControl>
-                            <Input placeholder="docs.google.com/… or 2.1 MB" {...field} />
+                            <Input placeholder="docs.arduino.cc or 2.1 MB" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={form.control}
-                      name="clubId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Club (optional)</FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder="School-wide" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {mockClubs.map((c) => (
-                                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
                     <DialogFooter>
-                      <Button type="submit" disabled={form.formState.isSubmitting}>Add resource</Button>
+                      <Button type="submit" disabled={form.formState.isSubmitting}>Upload Resource</Button>
                     </DialogFooter>
                   </form>
                 </Form>
@@ -197,9 +216,10 @@ export function ResourceLibraryView({ eyebrow, canManage }: { eyebrow: string; c
         searchPlaceholder="Search resources…"
         searchFn={(r, q) => r.title.toLowerCase().includes(q.toLowerCase())}
         emptyIcon={Library}
-        emptyTitle="No resources match your filters"
+        emptyTitle="No resources in this category yet"
+        emptyDescription="Choose a different category, or upload the first file for this one."
         toolbar={
-          <ClubFilter value={clubFilter} onChange={setClubFilter} />
+          <CategoryFilter value={category} onChange={setCategory} categories={RESOURCE_CATEGORIES} />
         }
       />
     </div>

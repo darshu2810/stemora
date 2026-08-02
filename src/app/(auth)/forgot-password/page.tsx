@@ -70,7 +70,7 @@ export default function ForgotPasswordPage() {
               <FormItem>
                 <FormLabel>Email</FormLabel>
                 <FormControl>
-                  <Input type="email" placeholder="you@school.edu" {...field} />
+                  <Input type="email" placeholder="you@gmis.sch.id" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

@@ -5,9 +5,9 @@ STEMORA uses a hybrid API approach, chosen per operation type:
 | Mechanism | Used for |
 |---|---|
 | **Server Actions** (`"use server"`, in `features/*/server/actions.ts`) | All UI-triggered mutations from Server/Client Components. Primary mutation path. |
-| **Route Handlers** (`app/api/v1/**`) | Anything needing a stable HTTP contract: webhooks (Stripe), third-party integrations, mobile clients (future), public-ish endpoints. |
-| **Supabase Edge Functions** (`supabase/functions/**`) | Work that must run with the service role, independent of a user request: Stripe webhook verification, transactional email sending via Resend, scheduled digest jobs, background exports. |
-| **Supabase Realtime** | Live features only: channel messages, notification badges, kanban card moves, presence. Client subscribes directly (via the anon key + RLS — never service role), no polling. |
+| **Route Handlers** (`app/api/v1/**`) | Anything needing a stable HTTP contract: third-party integrations, mobile clients (future), public-ish endpoints. |
+| **Supabase Edge Functions** (`supabase/functions/**`) | Work that must run with the service role, independent of a user request: transactional email (invitations, event reminders) via Resend, scheduled jobs, background exports. |
+| **Supabase Realtime** | Live features only: notification badges and kanban card moves. Client subscribes directly (via the anon key + RLS — never service role), no polling. |
 
 Business logic is never duplicated across these — Route Handlers and Server
 Actions both call the same `features/*/server/*` functions; Edge Functions
@@ -20,12 +20,16 @@ must run outside the Next.js runtime.
 app/api/v1/
 ├── schools/route.ts                       GET (platform_owner: list), POST (create, marketing signup)
 ├── schools/[schoolId]/route.ts            GET, PATCH, DELETE (soft)
-├── clubs/route.ts                         GET (list, scoped), POST
-├── clubs/[clubId]/route.ts                GET, PATCH, DELETE
-├── clubs/[clubId]/members/route.ts        GET, POST (invite)
-├── clubs/[clubId]/assignments/route.ts    GET, POST
-├── assignments/[assignmentId]/submissions/route.ts   GET, POST
-├── webhooks/stripe/route.ts               POST (signature-verified, service role)
+├── students/route.ts                      GET (the club roster), POST (invite)
+├── students/[studentId]/route.ts          GET, PATCH, DELETE
+├── projects/route.ts                      GET (scoped, filterable by category/status), POST
+├── projects/[projectId]/route.ts          GET, PATCH, DELETE
+├── projects/[projectId]/tasks/route.ts    GET, POST
+├── tasks/[taskId]/route.ts                PATCH (move/reassign), DELETE
+├── competitions/route.ts                  GET, POST
+├── events/route.ts                        GET, POST
+├── resources/route.ts                     GET, POST
+├── announcements/route.ts                 GET, POST
 ├── webhooks/resend/route.ts               POST (delivery/bounce events)
 └── search/route.ts                        GET
 ```
@@ -49,10 +53,10 @@ app/api/v1/
   `withApiHandler()` higher-order function so no handler can skip them by
   accident.
 - **Pagination**: cursor-based (`?cursor=&limit=`) for feeds that grow
-  unbounded (messages, notifications, audit logs); offset-based
-  (`?page=&pageSize=`) acceptable for bounded admin lists (schools, clubs).
-- **Idempotency**: mutating webhook consumers (Stripe) dedupe on the
-  provider's event ID before processing.
+  unbounded (notifications, audit logs); offset-based
+  (`?page=&pageSize=`) acceptable for bounded lists (the student roster, the resource library).
+- **Idempotency**: any webhook consumer dedupes on the provider's event ID
+  before processing.
 
 ## Rate limiting
 
@@ -85,8 +89,7 @@ cross-tenant or under-privileged read/write from succeeding.
 | Function | Trigger | Purpose |
 |---|---|---|
 | `send-invitation-email` | invoked from Server Action after `invitations` insert | Resend transactional email |
-| `stripe-webhook` | Stripe webhook | Sync `school_subscriptions` on payment events |
-| `digest-emails` | scheduled (cron, Phase 3) | Weekly club activity digest per user |
+| `event-reminders` | scheduled (cron) | Remind the club the day before a meeting, workshop, or competition |
 | `export-school-data` | invoked, long-running | Generate GDPR/FERPA export archive |
 | `purge-deleted-school` | scheduled (cron) | Hard-delete schools past the 30-day soft-delete grace period |
 

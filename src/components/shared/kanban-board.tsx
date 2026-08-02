@@ -11,7 +11,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import type { BoardCard, BoardColumnId } from "@/lib/mock-data";
 
 const PRIORITY_STYLES: Record<BoardCard["priority"], string> = {
@@ -112,7 +112,7 @@ export function KanbanBoard({
                     </span>
                     <span className="flex items-center gap-1 text-xs text-muted-foreground">
                       <CalendarDays className="size-3" />
-                      {card.dueDate.slice(5)}
+                      {formatDate(card.dueDate)}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 pt-0.5">
@@ -127,7 +127,7 @@ export function KanbanBoard({
               ))}
               {cards.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
-                  Drop a card here
+                  No tasks in {column.name.toLowerCase()}
                 </p>
               ) : null}
             </div>

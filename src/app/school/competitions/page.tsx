@@ -1,5 +1,5 @@
 import { CompetitionsView } from "@/components/competitions/competitions-view";
 
 export default function SchoolCompetitionsPage() {
-  return <CompetitionsView eyebrow="School" canManage />;
+  return <CompetitionsView canManage />;
 }

@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { setStoredRole } from "@/lib/mock-session";
-import { ROLE_LABELS, PREVIEW_ROLES, dashboardForRole, type UserRole } from "@/config/roles";
+import { ROLE_LABELS, ALL_ROLES, dashboardForRole, type UserRole } from "@/config/roles";
 
 const loginSchema = z.object({
   email: z.email("Enter a valid email"),
@@ -63,7 +63,7 @@ export default function LoginPage() {
               <FormItem>
                 <FormLabel>Email</FormLabel>
                 <FormControl>
-                  <Input type="email" autoComplete="email" placeholder="you@school.edu" {...field} />
+                  <Input type="email" autoComplete="email" placeholder="you@gmis.sch.id" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -97,14 +97,16 @@ export default function LoginPage() {
                   <FormLabel className="font-mono text-[0.68rem] uppercase tracking-wider text-muted-foreground">
                     Preview mode — continue as
                   </FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  {/* Base UI renders the raw value in the trigger unless the
+                      root is given an `items` map. */}
+                  <Select items={ROLE_LABELS} value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {PREVIEW_ROLES.map((role) => (
+                      {ALL_ROLES.map((role) => (
                         <SelectItem key={role} value={role}>
                           {ROLE_LABELS[role]}
                         </SelectItem>

@@ -1,8 +1,21 @@
 import type { UserRole } from "@/config/roles";
 
 // Fixture data for building UI ahead of the backend. Shape mirrors the real
-// schema in docs/architecture/database-schema.md so swapping in real
-// Supabase queries later is a drop-in replacement, not a rewrite.
+// schema in docs/architecture/database-schema.md so swapping in real Supabase
+// queries later is a drop-in replacement, not a rewrite.
+//
+// The model is deliberately flat: one school runs exactly ONE STEM Club, and
+// every student, project, competition, resource, announcement, and event
+// belongs directly to that club. There is no club table and no club id —
+// subject areas exist only as PROJECT_CATEGORIES on a project.
+//
+// The pilot tenant is the GMIS STEM Club at GMIS Jakarta. Every person and
+// every result below is fictional and exists only to make the demo legible.
+
+// Fixture data is anchored to this term rather than the wall clock, so the
+// demo reads the same on any day. One constant, used everywhere a view needs
+// to know what counts as "upcoming".
+export const DEMO_TODAY = "2026-08-03";
 
 export type MockUser = {
   id: string;
@@ -10,17 +23,15 @@ export type MockUser = {
   role: UserRole;
   email: string;
   avatarInitials: string;
-  club?: string;
 };
 
 export const mockSchool = {
-  id: "school_1",
-  name: "SMA Negeri 8 Jakarta",
-  slug: "sman8-jakarta",
-  district: "Jakarta Selatan",
-  plan: "Standard",
-  memberCount: 727,
-  clubCount: 17,
+  id: "school_gmis",
+  name: "GMIS Jakarta",
+  slug: "gmis-jakarta",
+  district: "Jakarta Timur",
+  clubName: "GMIS STEM Club",
+  term: "Term 1 · 2026/27",
 };
 
 export const mockUsers: Record<UserRole, MockUser> = {
@@ -33,276 +44,304 @@ export const mockUsers: Record<UserRole, MockUser> = {
   },
   school_admin: {
     id: "u_admin",
-    name: "Bu Rina Wijaya",
+    name: "Ms. Priya Menon",
     role: "school_admin",
-    email: "rina.wijaya@sman8jakarta.sch.id",
-    avatarInitials: "RW",
+    email: "priya.menon@gmis.sch.id",
+    avatarInitials: "PM",
   },
   student: {
     id: "u_student",
-    name: "Sofia Kim",
+    name: "Anaya Kapoor",
     role: "student",
-    email: "sofia.kim@student.sman8jakarta.sch.id",
-    avatarInitials: "SK",
-    club: "Robotics Club",
+    email: "anaya.kapoor@student.gmis.sch.id",
+    avatarInitials: "AK",
   },
 };
 
-export const mockClubs = [
-  { id: "club_robotics", name: "Robotics Club", category: "Robotics", members: 34, cover: "from-primary to-brand-spark" },
-  { id: "club_code", name: "Code Collective", category: "Computer Science", members: 51, cover: "from-emerald-500 to-teal-400" },
-  { id: "club_bio", name: "Bio Innovators", category: "Biology", members: 22, cover: "from-fuchsia-500 to-purple-500" },
-  { id: "club_math", name: "Math Olympiad Team", category: "Mathematics", members: 18, cover: "from-amber-500 to-orange-500" },
+// --- Project categories -----------------------------------------------------
+// Subject areas are an attribute of a project, never a group students join.
+
+export type ProjectCategory =
+  | "Robotics"
+  | "Programming"
+  | "Artificial Intelligence"
+  | "Engineering"
+  | "Electronics"
+  | "Mathematics"
+  | "Research"
+  | "Physics"
+  | "Environmental Science";
+
+export const PROJECT_CATEGORIES: ProjectCategory[] = [
+  "Robotics",
+  "Programming",
+  "Artificial Intelligence",
+  "Engineering",
+  "Electronics",
+  "Mathematics",
+  "Research",
+  "Physics",
+  "Environmental Science",
 ];
 
-export const mockAssignments = [
-  { id: "a1", title: "Line-Following Robot: Sensor Calibration", club: "Robotics Club", due: "Aug 8", status: "published" as const, submissions: 21, total: 34 },
-  { id: "a2", title: "Autonomous Navigation Writeup", club: "Robotics Club", due: "Aug 12", status: "draft" as const, submissions: 0, total: 34 },
-  { id: "a3", title: "Regional Qualifier Design Doc", club: "Robotics Club", due: "Jul 30", status: "published" as const, submissions: 34, total: 34 },
-];
+// --- Students ---------------------------------------------------------------
 
-export const mockNotifications = [
-  { id: "n1", title: "New submission from Sofia Kim", body: "Line-Following Robot: Sensor Calibration", time: "12m ago", unread: true },
-  { id: "n2", title: "Assignment graded", body: "Regional Qualifier Design Doc — 92/100", time: "2h ago", unread: true },
-  { id: "n3", title: "Aditya Pratama invited you", body: "Join Robotics Club as a member", time: "1d ago", unread: false },
-];
+export type StudentStatus = "active" | "invited";
 
-// STEMORA is launching in Jakarta first (see product context) — platform-level
-// mock data reflects that city-scale rollout rather than a global figure.
-export const mockPlatformStats = {
-  totalSchools: 42,
-  totalStudents: 8_140,
-  totalClubs: 316,
-  mrr: 6_240,
-};
-
-export type SchoolPlan = "Free" | "Standard" | "Premium";
-export type SchoolStatus = "active" | "suspended" | "pending";
-
-export type MockSchoolRecord = {
-  id: string;
-  name: string;
-  district: string;
-  plan: SchoolPlan;
-  members: number;
-  clubs: number;
-  status: SchoolStatus;
-  joinedAt: string;
-};
-
-const DISTRICTS = [
-  "Jakarta Selatan",
-  "Jakarta Pusat",
-  "Jakarta Barat",
-  "Jakarta Timur",
-  "Jakarta Utara",
-  "Tangerang Selatan",
-];
-
-const SCHOOL_NAMES = [
-  "SMA Negeri 8 Jakarta",
-  "SMA Negeri 28 Jakarta",
-  "SMA Negeri 70 Jakarta",
-  "SMA Labschool Kebayoran",
-  "SMA Kristen IPEKA",
-  "SMA BPK Penabur Jakarta",
-  "Sekolah Cikal Amri Setu",
-  "Jakarta Nurul Fikri STEM School",
-  "SMA Global Sevilla",
-  "SMA Tarakanita Jakarta",
-  "SMA Santa Ursula Jakarta",
-  "SMA Al Azhar Kebayoran",
-  "SMAK 5 Penabur",
-  "Sekolah Pelita Harapan Kemang",
-  "SMA Negeri 3 Jakarta",
-  "Global Prestasi School",
-  "SMA Kanisius Jakarta",
-  "SMA Negeri 46 Jakarta",
-  "Sekolah Highscope Indonesia",
-  "SMA Regina Pacis Jakarta",
-  "SMA Negeri 21 Jakarta",
-  "Binus School Serpong",
-  "SMA Negeri 6 Jakarta",
-  "Sekolah Victory Plus",
-];
-
-function seededRandom(seed: number) {
-  const x = Math.sin(seed) * 10000;
-  return x - Math.floor(x);
-}
-
-export const mockSchools: MockSchoolRecord[] = SCHOOL_NAMES.map((name, i) => {
-  const r1 = seededRandom(i + 1);
-  const r2 = seededRandom(i + 51);
-  const r3 = seededRandom(i + 101);
-  const plan: SchoolPlan = r1 > 0.75 ? "Premium" : r1 > 0.4 ? "Standard" : "Free";
-  const status: SchoolStatus = r2 > 0.93 ? "suspended" : r2 > 0.85 ? "pending" : "active";
-  const members = Math.round(60 + r1 * 940);
-  const month = 1 + Math.floor(r3 * 7);
-  return {
-    id: `school_${i + 1}`,
-    name,
-    district: DISTRICTS[i % DISTRICTS.length],
-    plan,
-    members,
-    clubs: Math.max(1, Math.round(members / 42)),
-    status,
-    joinedAt: `2026-0${month}-${String(1 + Math.floor(r2 * 27)).padStart(2, "0")}`,
-  };
-});
-
-export const mockGrowthSeries = [
-  { month: "Feb", schools: 6, students: 980 },
-  { month: "Mar", schools: 11, students: 1_920 },
-  { month: "Apr", schools: 17, students: 3_140 },
-  { month: "May", schools: 24, students: 4_460 },
-  { month: "Jun", schools: 31, students: 5_890 },
-  { month: "Jul", schools: 37, students: 7_120 },
-  { month: "Aug", schools: 42, students: 8_140 },
-];
-
-export const mockPlanDistribution = [
-  { plan: "Free", count: mockSchools.filter((s) => s.plan === "Free").length },
-  { plan: "Standard", count: mockSchools.filter((s) => s.plan === "Standard").length },
-  { plan: "Premium", count: mockSchools.filter((s) => s.plan === "Premium").length },
-];
-
-export type PlatformAuditEntry = {
-  id: string;
-  actor: string;
-  action: string;
-  target: string;
-  time: string;
-};
-
-export const mockPlatformAuditLog: PlatformAuditEntry[] = [
-  { id: "log1", actor: "Avery Chen", action: "school.plan_changed", target: "SMA Kristen IPEKA → Premium", time: "2026-08-01 14:22" },
-  { id: "log2", actor: "Avery Chen", action: "school.suspended", target: "Sekolah Victory Plus", time: "2026-07-31 09:05" },
-  { id: "log3", actor: "System", action: "school.created", target: "Global Prestasi School", time: "2026-07-29 11:47" },
-  { id: "log4", actor: "Avery Chen", action: "support.impersonation_started", target: "SMA Negeri 8 Jakarta", time: "2026-07-28 16:10" },
-  { id: "log5", actor: "System", action: "billing.payment_failed", target: "SMA Negeri 21 Jakarta", time: "2026-07-27 03:00" },
-  { id: "log6", actor: "Avery Chen", action: "feature_flag.enabled", target: "wiki_v2 → all Premium schools", time: "2026-07-25 10:30" },
-];
-
-export type FeatureFlag = {
-  id: string;
-  name: string;
-  description: string;
-  scope: string;
-  enabled: boolean;
-};
-
-export const mockFeatureFlags: FeatureFlag[] = [
-  { id: "flag_wiki_v2", name: "Club wiki v2 editor", description: "Block-based rich text editor for club wiki pages.", scope: "Premium schools", enabled: true },
-  { id: "flag_realtime_chat", name: "Realtime club channels", description: "Discord-style channels with live messaging.", scope: "All schools", enabled: false },
-  { id: "flag_achievements", name: "Achievements & badges", description: "Award badges to students from the club roster.", scope: "Beta schools", enabled: false },
-  { id: "flag_custom_domain", name: "Custom domains", description: "Let schools map their own domain to their workspace.", scope: "Premium schools", enabled: true },
-  { id: "flag_district_rollup", name: "District rollup reporting", description: "Aggregate reporting across schools in the same district.", scope: "Platform admin only", enabled: false },
-];
-
-// ---------------------------------------------------------------------------
-// School Dashboard (Phase 3): members, projects, kanban, tasks,
-// calendar/events, resources, announcements — all scoped to mockSchool.
-// ---------------------------------------------------------------------------
-
-export type ClubMemberRole = "leader" | "member";
-export type MemberStatus = "active" | "invited" | "suspended";
-
-export type SchoolMember = {
+export type Student = {
   id: string;
   name: string;
   email: string;
-  role: UserRole;
-  clubId: string | null;
-  club: string | null;
-  clubRole: ClubMemberRole | null;
-  status: MemberStatus;
+  grade: number; // GMIS STEM Club runs across Grades 8–12.
+  status: StudentStatus;
   joinedAt: string;
   avatarInitials: string;
 };
 
-const FIRST_NAMES = [
-  "Adit", "Bella", "Citra", "Dimas", "Eka", "Fajar", "Gita", "Hana", "Indra", "Joko",
-  "Kirana", "Lukman", "Maya", "Nadia", "Oscar", "Putri", "Qori", "Rangga", "Sari", "Tio",
-  "Umar", "Vina", "Wawan", "Yuni", "Zaki", "Ayu", "Bagus", "Cindy", "Dwi", "Farah",
-  "Galih", "Intan",
-];
-const LAST_NAMES = [
-  "Wijaya", "Santoso", "Pratama", "Halim", "Kusuma", "Saputra", "Wibowo", "Utami",
-  "Nugroho", "Setiawan", "Handayani", "Permadi", "Ramadhan", "Yulianto", "Kurniawan",
-  "Anggraini", "Prasetyo", "Firmansyah", "Salsabila", "Hidayat",
-];
-
-function nameFor(i: number) {
-  const first = FIRST_NAMES[i % FIRST_NAMES.length];
-  const last = LAST_NAMES[(i * 3 + 1) % LAST_NAMES.length];
-  return `${first} ${last}`;
-}
 function initialsFor(name: string) {
-  return name.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
-}
-function emailFor(name: string) {
-  return `${name.toLowerCase().replace(" ", ".")}@student.sman8jakarta.sch.id`;
+  return name
+    .split(" ")
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 }
 
-// The two signed-in personas, plus the named club leader that the rest of the
-// fixtures (announcements, resources, competitions) attribute content to.
-const CORE_MEMBERS: SchoolMember[] = [
-  { id: "u_admin", name: mockUsers.school_admin.name, email: mockUsers.school_admin.email, role: "school_admin", clubId: null, club: null, clubRole: null, status: "active", joinedAt: "2025-07-10", avatarInitials: mockUsers.school_admin.avatarInitials },
-  { id: "u_lead", name: "Aditya Pratama", email: "aditya.pratama@student.sman8jakarta.sch.id", role: "student", clubId: "club_robotics", club: "Robotics Club", clubRole: "leader", status: "active", joinedAt: "2025-08-01", avatarInitials: "AP" },
-  { id: "u_student", name: mockUsers.student.name, email: mockUsers.student.email, role: "student", clubId: "club_robotics", club: "Robotics Club", clubRole: "member", status: "active", joinedAt: "2025-08-20", avatarInitials: mockUsers.student.avatarInitials },
+function emailFor(name: string) {
+  const handle = name
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, "")
+    .trim()
+    .replace(/\s+/g, ".");
+  return `${handle}@student.gmis.sch.id`;
+}
+
+type StudentSeed = [id: string, name: string, grade: number, joinedAt: string, status?: StudentStatus];
+
+// 36 fictional students across Grades 8–12. `u_student` is the signed-in
+// student persona; the three `invited` rows are this term's pending
+// applications.
+const STUDENT_SEEDS: StudentSeed[] = [
+  ["s_rohan", "Rohan Gupta", 12, "2025-08-04"],
+  ["u_student", "Anaya Kapoor", 11, "2025-08-11"],
+  ["s_kevin", "Kevin Tanuwijaya", 12, "2025-08-04"],
+  ["s_ishaan", "Ishaan Mehra", 10, "2025-09-02"],
+  ["s_clara", "Clara Wijaya", 11, "2025-08-18"],
+  ["s_daniel", "Daniel Setiawan", 9, "2026-01-12"],
+  ["s_riko", "Riko Tanaka", 10, "2025-10-06"],
+  ["s_amara", "Amara Okonkwo", 8, "2026-01-12"],
+  ["s_vivaan", "Vivaan Nair", 12, "2025-08-04"],
+  ["s_jiahui", "Jia-Hui Lim", 11, "2025-08-11"],
+  ["s_rafael", "Rafael Santoso", 10, "2025-09-15"],
+  ["s_sanya", "Sanya Bhatt", 11, "2025-08-25"],
+  ["s_ethan", "Ethan Park", 12, "2025-08-04"],
+  ["s_nabila", "Nabila Hartono", 9, "2026-01-19"],
+  ["s_arjun", "Arjun Iyer", 10, "2025-11-03"],
+  ["s_meiling", "Mei Ling Chen", 8, "2026-07-27", "invited"],
+  ["s_kiara", "Kiara Dsouza", 12, "2025-08-04"],
+  ["s_bimo", "Bimo Prakoso", 11, "2025-08-18"],
+  ["s_aditi", "Aditi Raghavan", 10, "2025-09-08"],
+  ["s_joshua", "Joshua Tanoto", 9, "2026-01-12"],
+  ["s_hana", "Hana Sugiarto", 11, "2025-08-25"],
+  ["s_yusuf", "Yusuf Alatas", 12, "2025-08-11"],
+  ["s_elena", "Elena Kusumo", 8, "2026-02-02"],
+  ["s_dhruv", "Dhruv Malhotra", 12, "2025-08-04"],
+  ["s_sekar", "Sekar Ayuningtyas", 11, "2025-08-18"],
+  ["s_nathan", "Nathan Wibisono", 10, "2025-10-13"],
+  ["s_priyanka", "Priyanka Deshmukh", 12, "2025-08-11"],
+  ["s_farrel", "Farrel Hidayat", 9, "2026-01-26"],
+  ["s_ayla", "Ayla Kurniawan", 10, "2025-11-10"],
+  ["s_tomas", "Tomas Bergstrom", 11, "2026-07-27", "invited"],
+  ["s_meera", "Meera Krishnan", 12, "2025-08-04"],
+  ["s_bastian", "Bastian Halim", 11, "2025-08-25"],
+  ["s_yerin", "Yerin Cho", 10, "2025-09-22"],
+  ["s_rania", "Rania Firdaus", 9, "2026-01-19"],
+  ["s_krish", "Krish Patel", 12, "2025-08-11"],
+  ["s_laras", "Laras Wibowo", 8, "2026-07-27", "invited"],
 ];
 
-const STUDENT_COUNT = 34;
-const GENERATED_STUDENTS: SchoolMember[] = Array.from({ length: STUDENT_COUNT }, (_, idx) => {
-  const club = mockClubs[idx % mockClubs.length];
-  const name = nameFor(idx + 7);
-  const r = seededRandom(idx + 500);
-  // First generated member of each club (other than Robotics, which already has
-  // a named leader above) leads that club.
-  const clubRole: ClubMemberRole = idx > 0 && idx < mockClubs.length ? "leader" : "member";
-  const status: MemberStatus = r > 0.92 ? "invited" : r > 0.85 ? "suspended" : "active";
-  return {
-    id: `member_${idx + 1}`,
-    name,
-    email: emailFor(name),
-    role: "student" as UserRole,
-    clubId: club.id,
-    club: club.name,
-    clubRole,
-    status,
-    joinedAt: `2025-${String(8 + (idx % 4)).padStart(2, "0")}-${String(1 + (idx % 27)).padStart(2, "0")}`,
-    avatarInitials: initialsFor(name),
-  };
-});
+export const mockStudents: Student[] = STUDENT_SEEDS.map(([id, name, grade, joinedAt, status]) => ({
+  id,
+  name,
+  email: emailFor(name),
+  grade,
+  status: status ?? "active",
+  joinedAt,
+  avatarInitials: initialsFor(name),
+}));
 
-export const mockMembers: SchoolMember[] = [...CORE_MEMBERS, ...GENERATED_STUDENTS];
+export function studentById(id: string): Student | undefined {
+  return mockStudents.find((s) => s.id === id);
+}
 
-export const mockClubLeaders: SchoolMember[] = mockMembers.filter((m) => m.clubRole === "leader");
+export function studentName(id: string): string {
+  return studentById(id)?.name ?? "Unassigned";
+}
 
-// --- Projects & Kanban -------------------------------------------------
+export const GRADES: number[] = [...new Set(mockStudents.map((s) => s.grade))].sort((a, b) => a - b);
 
-export type ProjectStatus = "active" | "completed" | "archived";
+// --- Projects ---------------------------------------------------------------
+
+export type ProjectStatus = "active" | "completed";
 
 export type MockProject = {
   id: string;
-  clubId: string;
-  clubName: string;
   name: string;
+  category: ProjectCategory;
   description: string;
   status: ProjectStatus;
+  startedAt: string;
   dueDate: string;
+  // A project leader is an attribute of the project, not a system role — the
+  // student still signs in as a Student like everyone else.
+  leaderId: string;
+  memberIds: string[];
 };
 
 export const mockProjects: MockProject[] = [
-  { id: "proj_line_bot", clubId: "club_robotics", clubName: "Robotics Club", name: "Line-Following Robot v3", description: "Sensor-guided competition bot for the regional qualifier.", status: "active", dueDate: "2026-08-20" },
-  { id: "proj_regional_bot", clubId: "club_robotics", clubName: "Robotics Club", name: "Regional Qualifier Bot", description: "Last season's competition entry, kept for reference builds.", status: "completed", dueDate: "2026-05-10" },
-  { id: "proj_companion_app", clubId: "club_code", clubName: "Code Collective", name: "STEMORA Companion App", description: "A mobile companion app for club meeting schedules.", status: "active", dueDate: "2026-09-05" },
-  { id: "proj_traffic", clubId: "club_code", clubName: "Code Collective", name: "Jakarta Traffic Predictor", description: "ML model predicting traffic near school during pickup hours.", status: "active", dueDate: "2026-10-01" },
-  { id: "proj_water", clubId: "club_bio", clubName: "Bio Innovators", name: "Water Quality Sensor Array", description: "Low-cost sensor rig for testing river water near the school.", status: "active", dueDate: "2026-09-15" },
-  { id: "proj_microplastics", clubId: "club_bio", clubName: "Bio Innovators", name: "Microplastics Survey", description: "Sampling survey of microplastics in local waterways.", status: "completed", dueDate: "2026-04-01" },
-  { id: "proj_olympiad_bank", clubId: "club_math", clubName: "Math Olympiad Team", name: "Olympiad Problem Bank", description: "Shared bank of practice problems for the national olympiad.", status: "active", dueDate: "2026-08-30" },
+  {
+    id: "proj_autonomous_robot",
+    name: "Autonomous Robot",
+    category: "Robotics",
+    description:
+      "Infrared-guided robot that runs the inter-school time-trial track without leaving the line. Retuning the control loop after the switch to a five-sensor array.",
+    status: "active",
+    startedAt: "2026-02-09",
+    dueDate: "2026-09-12",
+    leaderId: "s_rohan",
+    memberIds: ["s_rohan", "u_student", "s_kevin", "s_ishaan", "s_clara", "s_daniel"],
+  },
+  {
+    id: "proj_drone_mapping",
+    name: "Drone Mapping",
+    category: "Robotics",
+    description:
+      "A camera drone that flies a fixed route over the school field and stitches the frames into a single top-down map of the campus.",
+    status: "active",
+    startedAt: "2026-04-20",
+    dueDate: "2026-10-24",
+    leaderId: "s_kevin",
+    memberIds: ["s_kevin", "u_student", "s_riko", "s_amara", "s_nathan"],
+  },
+  {
+    id: "proj_waste_ai",
+    name: "AI Waste Classification",
+    category: "Artificial Intelligence",
+    description:
+      "An image classifier that sorts canteen waste into organic, plastic, paper, and metal from a webcam feed, trained on photos taken around campus.",
+    status: "active",
+    startedAt: "2026-03-02",
+    dueDate: "2026-09-30",
+    leaderId: "s_vivaan",
+    memberIds: ["s_vivaan", "s_sanya", "s_jiahui", "s_arjun", "s_rafael"],
+  },
+  {
+    id: "proj_attendance_portal",
+    name: "Attendance Portal",
+    category: "Programming",
+    description:
+      "A QR check-in tool for the weekly STEM Club meeting, built in Python and now used at every session.",
+    status: "completed",
+    startedAt: "2026-01-19",
+    dueDate: "2026-05-22",
+    leaderId: "s_ethan",
+    memberIds: ["s_ethan", "s_vivaan", "s_nabila", "s_rafael"],
+  },
+  {
+    id: "proj_solar_tracking",
+    name: "Solar Tracking System",
+    category: "Electronics",
+    description:
+      "A dual-axis panel mount that follows the sun using light-dependent resistors and two servos, logging output against a fixed reference panel.",
+    status: "active",
+    startedAt: "2026-03-16",
+    dueDate: "2026-09-19",
+    leaderId: "s_kiara",
+    memberIds: ["s_kiara", "s_bimo", "s_aditi", "s_joshua", "s_hana"],
+  },
+  {
+    id: "proj_weather_station",
+    name: "IoT Weather Station",
+    category: "Electronics",
+    description:
+      "A rooftop station logging temperature, humidity, rainfall, and air quality to a live dashboard — running continuously since March.",
+    status: "completed",
+    startedAt: "2026-02-02",
+    dueDate: "2026-06-06",
+    leaderId: "s_yusuf",
+    memberIds: ["s_yusuf", "s_kiara", "s_elena", "s_bimo"],
+  },
+  {
+    id: "proj_smart_irrigation",
+    name: "Smart Irrigation",
+    category: "Environmental Science",
+    description:
+      "Moisture-triggered watering for the school garden beds, with a phone alert when the tank runs low.",
+    status: "active",
+    startedAt: "2026-04-06",
+    dueDate: "2026-10-10",
+    leaderId: "s_hana",
+    memberIds: ["s_hana", "s_aditi", "s_joshua", "u_student", "s_farrel", "s_rania"],
+  },
+  {
+    id: "proj_bridge_challenge",
+    name: "Bridge Engineering Challenge",
+    category: "Engineering",
+    description:
+      "Balsa-wood truss bridges tested to failure on a load rig, entered in the inter-school bridge-building challenge.",
+    status: "active",
+    startedAt: "2026-05-11",
+    dueDate: "2026-11-07",
+    leaderId: "s_dhruv",
+    memberIds: ["s_dhruv", "s_sekar", "s_nathan", "s_farrel", "s_ayla"],
+  },
+  {
+    id: "proj_hologram",
+    name: "Pepper's Ghost Hologram",
+    category: "Physics",
+    description:
+      "An acrylic pyramid display that projects a rotating 3D model, built for the STEM booth at Open Day.",
+    status: "completed",
+    startedAt: "2026-02-16",
+    dueDate: "2026-05-15",
+    leaderId: "s_priyanka",
+    memberIds: ["s_priyanka", "s_sekar", "s_ayla", "s_elena"],
+  },
+  {
+    id: "proj_paper_repository",
+    name: "Research Paper Repository",
+    category: "Research",
+    description:
+      "A searchable archive of every write-up, poster, and dataset the STEM Club has produced, so next year's members start from what already exists.",
+    status: "active",
+    startedAt: "2026-04-27",
+    dueDate: "2026-09-26",
+    leaderId: "s_meera",
+    memberIds: ["s_meera", "s_bastian", "s_krish", "s_yerin"],
+  },
+  {
+    id: "proj_air_quality",
+    name: "Air Quality Data Study",
+    category: "Mathematics",
+    description:
+      "A term-long statistical study of PM2.5 readings at three East Jakarta locations, written up for the science fair.",
+    status: "active",
+    startedAt: "2026-03-23",
+    dueDate: "2026-10-03",
+    leaderId: "s_bastian",
+    memberIds: ["s_bastian", "s_meera", "s_yerin", "s_rania", "s_krish"],
+  },
 ];
+
+export function projectById(id: string): MockProject | undefined {
+  return mockProjects.find((p) => p.id === id);
+}
+
+export function projectsForStudent(studentId: string): MockProject[] {
+  return mockProjects.filter((p) => p.memberIds.includes(studentId));
+}
+
+// --- Tasks (project boards) -------------------------------------------------
 
 export type BoardCardPriority = "low" | "medium" | "high";
 export type BoardColumnId = "backlog" | "todo" | "in_progress" | "in_review" | "done";
@@ -310,6 +349,7 @@ export type BoardColumnId = "backlog" | "todo" | "in_progress" | "in_review" | "
 export type BoardCard = {
   id: string;
   title: string;
+  assigneeId: string;
   assignee: string;
   assigneeInitials: string;
   dueDate: string;
@@ -325,112 +365,381 @@ export const BOARD_COLUMNS: { id: BoardColumnId; name: string }[] = [
   { id: "done", name: "Done" },
 ];
 
-const TASK_VERBS = [
-  "Design", "Prototype", "Test", "Document", "Calibrate", "Assemble", "Debug", "Present",
-  "Research", "Review", "Refactor", "Wire up", "3D print", "Solder", "Benchmark", "Sketch",
-];
-const TASK_NOUNS = [
-  "sensor mount", "chassis frame", "control loop", "battery pack", "wiring harness",
-  "user interface", "data pipeline", "test rig", "presentation deck", "budget sheet",
-  "motor driver", "camera module", "training set", "circuit board", "enclosure",
-];
-
-function membersForClub(clubId: string) {
-  const roster = mockMembers.filter((m) => m.clubId === clubId);
-  return roster.length ? roster : mockMembers.slice(0, 5);
+function seededRandom(seed: number) {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
 }
 
+// Real task lists per project, so a board reads like something the club
+// actually worked through rather than randomly paired verbs and nouns.
+const PROJECT_TASKS: Record<string, string[]> = {
+  proj_autonomous_robot: [
+    "Solder the five-sensor IR array",
+    "Mount the sensor bar 8mm above the track",
+    "Wire the motor driver to the Arduino Nano",
+    "Write the sensor calibration routine",
+    "Tune the control loop on the practice track",
+    "Cut and drill the new chassis plate",
+    "Design a 3D-printed sensor bracket",
+    "Log lap times across three gain settings",
+    "Fix the wobble on the left wheel mount",
+    "Test battery life over 20 laps",
+    "Update the wiring diagram in the resource library",
+    "Record a demo video for the showcase",
+  ],
+  proj_drone_mapping: [
+    "Assemble the quadcopter frame",
+    "Balance and mount the propellers",
+    "Configure the flight controller firmware",
+    "Calibrate the compass and IMU",
+    "Write the pre-flight safety checklist",
+    "Get flight permission from the head of school",
+    "Plan the survey route over the field",
+    "Mount the camera gimbal",
+    "Run a tethered hover test",
+    "Capture the first photo set",
+    "Stitch the images into a test map",
+  ],
+  proj_waste_ai: [
+    "Photograph 500 canteen waste samples",
+    "Label the dataset into four classes",
+    "Split train, validation, and test sets",
+    "Train the baseline model",
+    "Compare accuracy against MobileNet",
+    "Build the webcam capture script",
+    "Handle the unknown-object case",
+    "Test the model under canteen lighting",
+    "Write up the confusion matrix",
+    "Design the sorting bin overlay",
+    "Draft the science fair abstract",
+  ],
+  proj_attendance_portal: [
+    "Design the QR check-in flow",
+    "Build the student lookup table",
+    "Print student QR cards",
+    "Fix duplicate scans within one minute",
+    "Write the weekly attendance export",
+    "Test check-in with 30 students",
+    "Document the setup steps",
+    "Hand the tool over to the School Admin",
+  ],
+  proj_solar_tracking: [
+    "Build the dual-axis servo mount",
+    "Wire the four LDR voltage dividers",
+    "Write the sun-tracking algorithm",
+    "3D print the panel bracket",
+    "Add end-stops to protect the servos",
+    "Log output against a fixed panel for a week",
+    "Weatherproof the control box",
+    "Chart the efficiency gain",
+    "Order a replacement 6V panel",
+    "Present the findings at the weekly meeting",
+  ],
+  proj_weather_station: [
+    "Assemble the Stevenson screen",
+    "Mount the anemometer on the roof",
+    "Connect the PM2.5 sensor",
+    "Push readings to the dashboard every 5 minutes",
+    "Validate readings against the BMKG station",
+    "Build the public dashboard page",
+    "Write the deployment report",
+    "Hand monitoring over to the Grade 10 team",
+  ],
+  proj_smart_irrigation: [
+    "Calibrate the capacitive soil sensors",
+    "Plumb the drip line to garden bed 3",
+    "Wire the relay to the 12V pump",
+    "Set moisture thresholds per plant type",
+    "Add the low-tank float switch",
+    "Build the low-water alert",
+    "Weatherproof the outdoor enclosure",
+    "Run a seven-day unattended test",
+    "Measure water saved against manual watering",
+    "Write the maintenance guide for the gardener",
+  ],
+  proj_bridge_challenge: [
+    "Study last year's truss designs",
+    "Model the Pratt truss in Fusion 360",
+    "Build the load-testing rig",
+    "Test joint glue strength",
+    "Cut balsa members to length",
+    "Record load-to-failure for prototype 1",
+    "Bring the deck mass under 25g",
+    "Register the team for the challenge",
+    "Prepare the design justification report",
+    "Build the competition bridge",
+  ],
+  proj_hologram: [
+    "Cut the acrylic pyramid panels",
+    "Polish and bond the seams",
+    "Model the rotating molecule animation",
+    "Build the blackout box for the booth",
+    "Test viewing angles under hall lighting",
+    "Write the visitor explainer card",
+    "Run the booth on Open Day",
+    "Pack and store the rig",
+  ],
+  proj_paper_repository: [
+    "Collect every write-up from the last two terms",
+    "Agree the metadata fields for each entry",
+    "Scan the 2025 science fair posters",
+    "Build the search and filter page",
+    "Add the upload form for new papers",
+    "Write the submission guidelines",
+    "Migrate the existing drive folder",
+    "Review entries for missing authors",
+    "Publish the archive to the club",
+  ],
+  proj_air_quality: [
+    "Choose the three sampling locations",
+    "Borrow the PM2.5 meters from the lab",
+    "Set the daily sampling schedule",
+    "Enter the week 1–4 readings",
+    "Clean the data and check for outliers",
+    "Run the comparison across locations",
+    "Plot weekday against weekend readings",
+    "Draft the methodology section",
+    "Peer-review with the Grade 12 team",
+    "Format the science fair poster",
+  ],
+};
+
+function daysBetween(from: string, to: string) {
+  return (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000;
+}
+
+function addDays(from: string, days: number) {
+  const d = new Date(`${from}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + Math.round(days));
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * A project's board, derived rather than hand-written so the numbers can never
+ * contradict each other.
+ *
+ * Task lists are written in the order the club works through them, so tasks
+ * are spread evenly between the start date and the deadline, and a project
+ * that is 60% of the way through its schedule has roughly its first 60% of
+ * tasks done. A finished project is entirely done. That keeps every progress
+ * bar, "N/M tasks done" count, and pending-task list honest.
+ */
 export function getProjectBoard(projectId: string): Record<BoardColumnId, BoardCard[]> {
-  const project = mockProjects.find((p) => p.id === projectId);
+  const project = projectById(projectId);
   const columns: Record<BoardColumnId, BoardCard[]> = {
     backlog: [], todo: [], in_progress: [], in_review: [], done: [],
   };
   if (!project) return columns;
 
-  const roster = membersForClub(project.clubId);
-  const cardCount = 10 + Math.floor(seededRandom(projectId.length * 13) * 6);
+  const roster = project.memberIds;
+  const titles = PROJECT_TASKS[projectId] ?? [];
+  const span = Math.max(1, daysBetween(project.startedAt, project.dueDate));
+  const elapsed = Math.min(1, Math.max(0, daysBetween(project.startedAt, DEMO_TODAY) / span));
 
-  for (let i = 0; i < cardCount; i++) {
-    const seed = projectId.charCodeAt(0) + i * 17;
-    const r1 = seededRandom(seed);
-    const r2 = seededRandom(seed + 3);
-    const r3 = seededRandom(seed + 9);
-    const assignee = roster[i % roster.length];
-    const columnIdx =
-      project.status === "completed"
-        ? 4
-        : Math.min(4, Math.floor(r1 * (i < 3 ? 2 : 5)));
-    const column = BOARD_COLUMNS[columnIdx].id;
-    const verb = TASK_VERBS[Math.floor(r2 * TASK_VERBS.length)];
-    const noun = TASK_NOUNS[Math.floor(r3 * TASK_NOUNS.length)];
-    const priority: BoardCardPriority = r1 > 0.7 ? "high" : r1 > 0.35 ? "medium" : "low";
-    const dueDay = 1 + Math.floor(r2 * 27);
+  // Real teams run a little behind a purely linear burn-down, so a project 80%
+  // through its schedule is about 64% done rather than exactly 80%.
+  const doneCount =
+    project.status === "completed" ? titles.length : Math.round(elapsed * 0.8 * titles.length);
+  const remaining = titles.length - doneCount;
+  // Whatever is left sits closest-to-finished first: one item in review, then
+  // the rest split evenly across in progress, queued, and the backlog.
+  const reviewCount = Math.min(1, remaining);
+  const rest = remaining - reviewCount;
+  const inProgressCount = Math.floor(rest / 3);
+  const todoCount = Math.floor(rest / 3);
+
+  titles.forEach((title, i) => {
+    const assigneeId = roster[i % roster.length];
+    const assignee = studentById(assigneeId);
+
+    const offset = i - doneCount;
+    const column: BoardColumnId =
+      offset < 0
+        ? "done"
+        : offset < reviewCount
+          ? "in_review"
+          : offset < reviewCount + inProgressCount
+            ? "in_progress"
+            : offset < reviewCount + inProgressCount + todoCount
+              ? "todo"
+              : "backlog";
 
     columns[column].push({
-      id: `${projectId}_card_${i}`,
-      title: `${verb} ${noun}`,
-      assignee: assignee.name,
-      assigneeInitials: assignee.avatarInitials,
-      dueDate: `2026-08-${String(dueDay).padStart(2, "0")}`,
-      priority,
+      id: `${projectId}_task_${i}`,
+      title,
+      assigneeId,
+      assignee: assignee?.name ?? "Unassigned",
+      assigneeInitials: assignee?.avatarInitials ?? "—",
+      dueDate: addDays(project.startedAt, ((i + 1) / titles.length) * span),
+      priority: seededRandom(projectId.length * 13 + i * 17) > 0.7 ? "high" : offset < todoCount ? "medium" : "low",
       column,
     });
-  }
+  });
 
   return columns;
 }
 
-// --- Announcements -------------------------------------------------------
+export function getProjectProgress(projectId: string): { done: number; total: number; percent: number } {
+  const board = getProjectBoard(projectId);
+  const total = BOARD_COLUMNS.reduce((sum, c) => sum + board[c.id].length, 0);
+  const done = board.done.length;
+  return { done, total, percent: total ? Math.round((done / total) * 100) : 0 };
+}
+
+export type OpenTask = BoardCard & { projectId: string; projectName: string };
+
+/** Every unfinished task on every board, earliest deadline first. */
+export function openTasks(): OpenTask[] {
+  return mockProjects
+    .flatMap((project) => {
+      const board = getProjectBoard(project.id);
+      return BOARD_COLUMNS.filter((c) => c.id !== "done").flatMap((col) =>
+        board[col.id].map((card) => ({ ...card, projectId: project.id, projectName: project.name })),
+      );
+    })
+    .sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1));
+}
+
+/** Every task on every board assigned to one student, open work first. */
+export function tasksForStudent(studentId: string): OpenTask[] {
+  return mockProjects
+    .flatMap((project) => {
+      const board = getProjectBoard(project.id);
+      return BOARD_COLUMNS.flatMap((col) =>
+        board[col.id]
+          .filter((card) => card.assigneeId === studentId)
+          .map((card) => ({ ...card, projectId: project.id, projectName: project.name })),
+      );
+    })
+    .sort(
+      (a, b) =>
+        Number(a.column === "done") - Number(b.column === "done") ||
+        (a.dueDate < b.dueDate ? -1 : 1),
+    );
+}
+
+// --- Announcements ----------------------------------------------------------
 
 export type Announcement = {
   id: string;
   title: string;
   body: string;
-  club: string | null; // null = school-wide
   author: string;
   pinned: boolean;
   date: string;
 };
 
 export const mockAnnouncements: Announcement[] = [
-  { id: "ann1", title: "Regional Qualifier is next Saturday", body: "Robotics Club — bring your bot and charged batteries by 7am. Bus leaves at 7:30 sharp.", club: "Robotics Club", author: "Aditya Pratama", pinned: true, date: "2026-08-01" },
-  { id: "ann2", title: "New STEM club fair — sign up to table", body: "All clubs are invited to table at the September STEM fair. Reply in your club channel by Friday.", club: null, author: "Bu Rina Wijaya", pinned: true, date: "2026-07-30" },
-  { id: "ann3", title: "Companion App design review", body: "We're reviewing the onboarding flow Thursday after school in Lab 3.", club: "Code Collective", author: "Bagus Anggraini", pinned: false, date: "2026-07-28" },
-  { id: "ann4", title: "River sampling trip rescheduled", body: "Moved to next Wednesday due to weather — same meeting spot at the school gate.", club: "Bio Innovators", author: "Citra Halim", pinned: false, date: "2026-07-26" },
-  { id: "ann5", title: "Olympiad practice sheet #12 posted", body: "Focus on combinatorics this week — solutions posted Friday.", club: "Math Olympiad Team", author: "Galih Kurniawan", pinned: false, date: "2026-07-24" },
-  { id: "ann6", title: "Club leader nominations open", body: "Any active member can nominate a peer to lead their club next term — form in the announcement thread.", club: null, author: "Bu Rina Wijaya", pinned: false, date: "2026-07-20" },
+  {
+    id: "ann1",
+    title: "Project proposal submission deadline extended",
+    body: "You now have until 15 August to submit your term project proposal. One page is enough — the problem, your approach, and anything you need from the lab budget.",
+    author: "Ms. Priya Menon",
+    pinned: true,
+    date: "2026-08-01",
+  },
+  {
+    id: "ann2",
+    title: "Workshop registration opens: Sensors & Motor Drivers",
+    body: "Friday 7 August, 14:00 in the Robotics Lab. Twenty places. Bring a laptop with the Arduino IDE already installed — we start wiring straight away.",
+    author: "Rohan Gupta",
+    pinned: true,
+    date: "2026-07-31",
+  },
+  {
+    id: "ann3",
+    title: "STEM Club applications are now open",
+    body: "Grades 8 to 12 can apply to join the GMIS STEM Club until Friday. Tell us which kind of project you want to work on — robotics, programming, electronics, engineering, or research.",
+    author: "Ms. Priya Menon",
+    pinned: true,
+    date: "2026-07-28",
+  },
+  {
+    id: "ann4",
+    title: "Science Fair registration closes next week",
+    body: "Teams entering the Jakarta Inter-School Science Fair must register by 8 August. Talk to your project leader if you still need a teammate.",
+    author: "Ms. Priya Menon",
+    pinned: false,
+    date: "2026-07-25",
+  },
+  {
+    id: "ann5",
+    title: "Arduino kits available from the lab store",
+    body: "Twenty starter kits are in the Science Block store cupboard. Sign one out in the logbook and return it at the end of term.",
+    author: "Kiara Dsouza",
+    pinned: false,
+    date: "2026-07-22",
+  },
+  {
+    id: "ann6",
+    title: "Weekly STEM meeting moves to Lab 2",
+    body: "From this week the Wednesday 15:30 meeting runs in Science Block Lab 2 instead of the library. Same time, more bench space.",
+    author: "Ms. Priya Menon",
+    pinned: false,
+    date: "2026-07-20",
+  },
+  {
+    id: "ann7",
+    title: "Competition deadline: Inter-school STEM Competition roster",
+    body: "Confirm your place on the 6 September roster by 20 August. Fourteen places, first come first served, and you must have attended two workshops.",
+    author: "Ms. Priya Menon",
+    pinned: false,
+    date: "2026-07-18",
+  },
+  {
+    id: "ann8",
+    title: "Internal Project Showcase — 28 August",
+    body: "Every project team presents in the School Hall at 13:00. Ten minutes each, one working demo, and a poster. Presentation slots go up next week.",
+    author: "Ms. Priya Menon",
+    pinned: false,
+    date: "2026-07-15",
+  },
 ];
 
-// --- Calendar & events ----------------------------------------------------
+// --- Events -----------------------------------------------------------------
 
-export type SchoolEvent = {
+export type EventType = "Meeting" | "Workshop" | "Competition" | "Showcase";
+
+export type StemEvent = {
   id: string;
   title: string;
-  club: string | null;
+  type: EventType;
   date: string; // ISO yyyy-mm-dd
   time: string;
   location: string;
   going: number;
-  invited: number;
 };
 
-export const mockEvents: SchoolEvent[] = [
-  { id: "ev1", title: "Regional Robotics Qualifier", club: "Robotics Club", date: "2026-08-08", time: "07:00", location: "Gelora Bung Karno Hall 3", going: 28, invited: 34 },
-  { id: "ev2", title: "STEM Club Fair", club: null, date: "2026-08-14", time: "09:00", location: "School Courtyard", going: 140, invited: 727 },
-  { id: "ev3", title: "Companion App design review", club: "Code Collective", date: "2026-08-06", time: "15:30", location: "Lab 3", going: 12, invited: 51 },
-  { id: "ev4", title: "River water sampling trip", club: "Bio Innovators", date: "2026-08-05", time: "08:00", location: "Ciliwung River, Kalibata", going: 15, invited: 22 },
-  { id: "ev5", title: "Math Olympiad practice session", club: "Math Olympiad Team", date: "2026-08-04", time: "16:00", location: "Room 214", going: 16, invited: 18 },
-  { id: "ev6", title: "Club leader elections town hall", club: null, date: "2026-08-18", time: "12:30", location: "Auditorium", going: 64, invited: 727 },
+export const EVENT_TYPES: EventType[] = ["Meeting", "Workshop", "Competition", "Showcase"];
+
+export const mockEvents: StemEvent[] = [
+  { id: "ev1", title: "Open Day STEM Booth", type: "Showcase", date: "2026-07-11", time: "09:00", location: "School Courtyard", going: 31 },
+  { id: "ev2", title: "Term 1 Kick-off Meeting", type: "Meeting", date: "2026-07-22", time: "15:30", location: "Science Block, Lab 2", going: 30 },
+  { id: "ev3", title: "Weekly STEM Club Meeting", type: "Meeting", date: "2026-07-29", time: "15:30", location: "Science Block, Lab 2", going: 28 },
+  { id: "ev4", title: "Weekly STEM Club Meeting", type: "Meeting", date: "2026-08-05", time: "15:30", location: "Science Block, Lab 2", going: 29 },
+  { id: "ev5", title: "Robotics Workshop: Sensors & Motor Drivers", type: "Workshop", date: "2026-08-07", time: "14:00", location: "Robotics Lab", going: 20 },
+  { id: "ev6", title: "Arduino Bootcamp — Day 1", type: "Workshop", date: "2026-08-14", time: "09:00", location: "Computer Lab 1", going: 20 },
+  { id: "ev7", title: "Arduino Bootcamp — Day 2", type: "Workshop", date: "2026-08-15", time: "09:00", location: "Computer Lab 1", going: 19 },
+  { id: "ev8", title: "Science Fair Preparation Session", type: "Workshop", date: "2026-08-19", time: "15:30", location: "Science Block, Lab 2", going: 22 },
+  { id: "ev9", title: "Internal Project Showcase", type: "Showcase", date: "2026-08-28", time: "13:00", location: "School Hall", going: 32 },
+  { id: "ev10", title: "Inter-school STEM Competition", type: "Competition", date: "2026-09-06", time: "07:30", location: "Jakarta Convention Center, Senayan", going: 14 },
 ];
 
-// --- Resource library ------------------------------------------------------
+export function upcomingEvents(): StemEvent[] {
+  return mockEvents.filter((e) => e.date >= DEMO_TODAY).sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+// --- Resource library -------------------------------------------------------
 
 export type ResourceType = "file" | "link";
+export type ResourceCategory = ProjectCategory | "General";
+
+export const RESOURCE_CATEGORIES: ResourceCategory[] = ["General", ...PROJECT_CATEGORIES];
 
 export type Resource = {
   id: string;
   title: string;
-  club: string | null;
+  category: ResourceCategory;
   type: ResourceType;
   meta: string; // file size, or link host
   uploadedBy: string;
@@ -438,187 +747,182 @@ export type Resource = {
 };
 
 export const mockResources: Resource[] = [
-  { id: "res1", title: "Sensor Calibration Guide.pdf", club: "Robotics Club", type: "file", meta: "2.4 MB", uploadedBy: "Aditya Pratama", date: "2026-07-29" },
-  { id: "res2", title: "Regional Qualifier Rulebook 2026", club: "Robotics Club", type: "link", meta: "fbri.or.id", uploadedBy: "Aditya Pratama", date: "2026-07-20" },
-  { id: "res3", title: "React Native Starter Kit.zip", club: "Code Collective", type: "file", meta: "18.1 MB", uploadedBy: "Bagus Anggraini", date: "2026-07-15" },
-  { id: "res4", title: "Water Testing Protocol.docx", club: "Bio Innovators", type: "file", meta: "540 KB", uploadedBy: "Citra Halim", date: "2026-07-10" },
-  { id: "res5", title: "AMC/AIME Problem Archive", club: "Math Olympiad Team", type: "link", meta: "artofproblemsolving.com", uploadedBy: "Galih Kurniawan", date: "2026-07-05" },
-  { id: "res6", title: "Club Leader Handbook.pdf", club: null, type: "file", meta: "1.1 MB", uploadedBy: "Bu Rina Wijaya", date: "2026-06-28" },
-  { id: "res7", title: "STEMORA Brand Kit", club: null, type: "link", meta: "stemora.com/brand", uploadedBy: "Bu Rina Wijaya", date: "2026-06-20" },
+  { id: "res1", title: "Autonomous Robot Wiring Diagram.png", category: "Robotics", type: "file", meta: "820 KB", uploadedBy: "Rohan Gupta", date: "2026-07-27" },
+  { id: "res2", title: "Arduino Beginner Guide.pdf", category: "Electronics", type: "file", meta: "3.1 MB", uploadedBy: "Kiara Dsouza", date: "2026-07-24" },
+  { id: "res3", title: "Inter-school STEM Competition Rulebook 2026.pdf", category: "General", type: "file", meta: "1.6 MB", uploadedBy: "Ms. Priya Menon", date: "2026-07-21" },
+  { id: "res4", title: "Python Programming Notes.pdf", category: "Programming", type: "file", meta: "1.8 MB", uploadedBy: "Vivaan Nair", date: "2026-07-19" },
+  { id: "res5", title: "CAD Design Basics — Fusion 360 for Students", category: "Engineering", type: "link", meta: "autodesk.com", uploadedBy: "Dhruv Malhotra", date: "2026-07-16" },
+  { id: "res6", title: "Electronics Handbook.pdf", category: "Electronics", type: "file", meta: "5.4 MB", uploadedBy: "Kiara Dsouza", date: "2026-07-12" },
+  { id: "res7", title: "STEM Project Planning Template.docx", category: "General", type: "file", meta: "240 KB", uploadedBy: "Ms. Priya Menon", date: "2026-07-08" },
+  { id: "res8", title: "Statistics for Science Fair Projects.pdf", category: "Mathematics", type: "file", meta: "2.2 MB", uploadedBy: "Meera Krishnan", date: "2026-07-06" },
+  { id: "res9", title: "GMIS STEM Club Handbook.pdf", category: "General", type: "file", meta: "1.2 MB", uploadedBy: "Ms. Priya Menon", date: "2026-07-04" },
+  { id: "res10", title: "Science Fair Judging Criteria.pdf", category: "Research", type: "file", meta: "410 KB", uploadedBy: "Ms. Priya Menon", date: "2026-07-02" },
+  { id: "res11", title: "Optics Notes — Reflection & Refraction.pdf", category: "Physics", type: "file", meta: "1.4 MB", uploadedBy: "Priyanka Deshmukh", date: "2026-06-30" },
+  { id: "res12", title: "scikit-learn Classification Tutorial", category: "Artificial Intelligence", type: "link", meta: "scikit-learn.org", uploadedBy: "Sanya Bhatt", date: "2026-06-26" },
+  { id: "res13", title: "Soil Moisture Sensor Datasheet.pdf", category: "Environmental Science", type: "file", meta: "680 KB", uploadedBy: "Hana Sugiarto", date: "2026-06-22" },
 ];
 
-// ---------------------------------------------------------------------------
-// Student Experience (Phase 4): profile, portfolio, achievements, skills,
-// competitions, leaderboard, messaging, notifications — mostly keyed by
-// member id so any member can eventually have a profile, not just the one
-// mock student persona.
-// ---------------------------------------------------------------------------
+// --- Competitions -----------------------------------------------------------
 
-export type BadgeId =
-  | "innovator"
-  | "team_leader"
-  | "researcher"
-  | "programmer"
-  | "engineer"
-  | "champion"
-  | "volunteer";
-
-export type BadgeDef = { id: BadgeId; name: string; description: string };
-
-export const BADGE_DEFS: BadgeDef[] = [
-  { id: "innovator", name: "Innovator", description: "Shipped an original idea from concept to demo." },
-  { id: "team_leader", name: "Team Leader", description: "Led a club or project team to completion." },
-  { id: "researcher", name: "Researcher", description: "Ran a rigorous research or data-collection project." },
-  { id: "programmer", name: "Programmer", description: "Wrote production-quality code for a real project." },
-  { id: "engineer", name: "Engineer", description: "Designed and built a working physical system." },
-  { id: "champion", name: "Champion", description: "Placed 1st at a competition." },
-  { id: "volunteer", name: "Volunteer", description: "Gave back — coached peers or volunteered club hours." },
-];
-
-export type StudentAchievement = { badgeId: BadgeId; earnedAt: string; note?: string };
-
-export const mockStudentAchievements: Record<string, StudentAchievement[]> = {
-  u_student: [
-    { badgeId: "programmer", earnedAt: "2026-03-12", note: "Line-Following Robot v2 firmware" },
-    { badgeId: "engineer", earnedAt: "2026-04-20", note: "Chassis redesign for v3" },
-    { badgeId: "champion", earnedAt: "2026-05-10", note: "Regional Qualifier — 1st place" },
-    { badgeId: "team_leader", earnedAt: "2026-07-01", note: "Build Team Captain" },
-  ],
-  u_lead: [
-    { badgeId: "team_leader", earnedAt: "2026-01-15" },
-    { badgeId: "champion", earnedAt: "2026-05-10" },
-    { badgeId: "volunteer", earnedAt: "2026-06-01" },
-  ],
-  member_1: [{ badgeId: "programmer", earnedAt: "2026-02-10" }],
-  member_3: [{ badgeId: "researcher", earnedAt: "2026-03-01" }, { badgeId: "volunteer", earnedAt: "2026-04-01" }],
-  member_5: [{ badgeId: "innovator", earnedAt: "2026-01-20" }],
-  member_8: [{ badgeId: "engineer", earnedAt: "2026-02-15" }],
-};
-
-export type Skill = { name: string; level: number; category: string };
-
-export const mockStudentSkills: Record<string, Skill[]> = {
-  u_student: [
-    { name: "Python", level: 4, category: "Programming" },
-    { name: "Arduino / Embedded C", level: 4, category: "Programming" },
-    { name: "CAD (Fusion 360)", level: 3, category: "Design" },
-    { name: "Soldering", level: 5, category: "Hardware" },
-    { name: "Public Speaking", level: 3, category: "Soft Skills" },
-    { name: "Team Leadership", level: 4, category: "Soft Skills" },
-  ],
-};
-
-export type Certificate = { id: string; title: string; issuer: string; date: string };
-
-export const mockStudentCertificates: Record<string, Certificate[]> = {
-  u_student: [
-    { id: "cert1", title: "Introduction to Robotics", issuer: "Coursera", date: "2026-02-01" },
-    { id: "cert2", title: "FIRST Robotics Safety Certification", issuer: "FIRST Indonesia", date: "2026-01-15" },
-    { id: "cert3", title: "Arduino Fundamentals", issuer: "STEMORA Academy", date: "2025-11-20" },
-  ],
-};
-
-export type LeadershipRole = { id: string; title: string; org: string; period: string; description: string };
-
-export const mockStudentLeadership: Record<string, LeadershipRole[]> = {
-  u_student: [
-    {
-      id: "lead1",
-      title: "Build Team Captain",
-      org: "Robotics Club",
-      period: "Jul 2026 – Present",
-      description: "Leading the 8-person build team for the regional qualifier bot, running weekly stand-ups and the build schedule.",
-    },
-    {
-      id: "lead2",
-      title: "Sensor Subteam Lead",
-      org: "Robotics Club",
-      period: "Jan 2026 – Jun 2026",
-      description: "Owned the sensor calibration pipeline for the v2 competition bot.",
-    },
-  ],
-};
-
-export type StudentProfile = {
-  memberId: string;
-  handle: string;
-  headline: string;
-  about: string;
-  location: string;
-  links: { email: string; github?: string; linkedin?: string; website?: string };
-};
-
-export const mockStudentProfiles: Record<string, StudentProfile> = {
-  u_student: {
-    memberId: "u_student",
-    handle: "sofia-kim",
-    headline: "Build Team Captain @ Robotics Club · Regional Qualifier Champion",
-    about:
-      "I build competition robots and lead the sensor subteam at SMA Negeri 8 Jakarta's Robotics Club. Most interested in embedded systems and control loops — I want to study mechatronics engineering. Outside of robotics I run Arduino basics sessions for incoming freshmen.",
-    location: "Jakarta Selatan, Indonesia",
-    links: { email: "sofia.kim@student.sman8jakarta.sch.id", github: "github.com/sofiakim", linkedin: "linkedin.com/in/sofiakim", website: "sofiakim.dev" },
-  },
-};
-
-// --- Competitions ----------------------------------------------------------
-
-export type CompetitionStatus = "upcoming" | "ongoing" | "completed";
+export type CompetitionStatus = "upcoming" | "completed";
 export type CompetitionLevel = "School" | "Regional" | "National" | "International";
 
 export type Competition = {
   id: string;
   name: string;
-  club: string;
+  category: ProjectCategory;
   level: CompetitionLevel;
   date: string;
   status: CompetitionStatus;
   result?: string;
-  participants: string[];
+  podium: boolean;
+  participantIds: string[];
 };
+
+export const COMPETITION_LEVELS: CompetitionLevel[] = ["School", "Regional", "National", "International"];
 
 export const mockCompetitions: Competition[] = [
-  { id: "comp1", name: "FBRI Regional Robotics Qualifier", club: "Robotics Club", level: "Regional", date: "2026-05-10", status: "completed", result: "1st Place", participants: ["Aditya Pratama", "Sofia Kim", "Hana Pratama"] },
-  { id: "comp2", name: "National Robotics Championship", club: "Robotics Club", level: "National", date: "2026-08-08", status: "upcoming", participants: ["Aditya Pratama", "Sofia Kim", "Hana Pratama"] },
-  { id: "comp3", name: "Indonesia Science Fair — Water Quality", club: "Bio Innovators", level: "National", date: "2026-04-01", status: "completed", result: "3rd Place", participants: ["Citra Halim", "Joko Nugroho"] },
-  { id: "comp4", name: "ASEAN Coding Challenge", club: "Code Collective", level: "International", date: "2026-09-12", status: "upcoming", participants: ["Bagus Anggraini", "Indra Saputra"] },
-  { id: "comp5", name: "Jakarta Math Olympiad", club: "Math Olympiad Team", level: "Regional", date: "2026-06-15", status: "completed", result: "Finalist", participants: ["Galih Kurniawan"] },
-  { id: "comp6", name: "Hackathon Jakarta 2026", club: "Code Collective", level: "School", date: "2026-07-19", status: "completed", result: "2nd Place", participants: ["Bagus Anggraini"] },
-  { id: "comp7", name: "National Science Olympiad", club: "Bio Innovators", level: "National", date: "2026-10-05", status: "upcoming", participants: ["Citra Halim"] },
-  { id: "comp8", name: "City Robotics Scrimmage", club: "Robotics Club", level: "School", date: "2026-03-02", status: "completed", result: "1st Place", participants: ["Sofia Kim", "Putri Wibowo"] },
+  { id: "comp1", name: "Indonesia Robotics Olympiad — Jakarta Regional", category: "Robotics", level: "Regional", date: "2026-05-09", status: "completed", result: "Regional finalist", podium: false, participantIds: ["s_rohan", "u_student", "s_kevin"] },
+  { id: "comp2", name: "National Science Project Olympiad", category: "Research", level: "National", date: "2026-04-25", status: "completed", result: "1st place — data science category", podium: true, participantIds: ["s_meera", "s_rania"] },
+  { id: "comp3", name: "Jakarta Schools Hackathon", category: "Programming", level: "Regional", date: "2026-03-21", status: "completed", result: "2nd place", podium: true, participantIds: ["s_vivaan", "s_jiahui", "s_arjun"] },
+  { id: "comp4", name: "National Electronics Design Contest", category: "Electronics", level: "National", date: "2026-06-13", status: "completed", result: "Best Engineering Design award", podium: false, participantIds: ["s_kiara", "s_aditi", "s_yusuf"] },
+  { id: "comp5", name: "Jakarta Inter-School Science Fair", category: "Environmental Science", level: "Regional", date: "2026-08-22", status: "upcoming", podium: false, participantIds: ["s_meera", "s_bastian", "s_yerin"] },
+  { id: "comp6", name: "Internal Project Showcase", category: "Engineering", level: "School", date: "2026-08-28", status: "upcoming", podium: false, participantIds: ["s_dhruv", "s_sekar", "s_priyanka"] },
+  { id: "comp7", name: "World Robot Olympiad — Indonesia Qualifier", category: "Robotics", level: "National", date: "2026-09-06", status: "upcoming", podium: false, participantIds: ["s_rohan", "u_student", "s_ishaan", "s_clara"] },
+  { id: "comp8", name: "ASEAN Youth Innovation Challenge", category: "Artificial Intelligence", level: "International", date: "2026-10-18", status: "upcoming", podium: false, participantIds: ["s_vivaan", "s_sanya", "s_ethan"] },
+  { id: "comp9", name: "Inter-school Bridge Building Challenge", category: "Engineering", level: "Regional", date: "2026-11-14", status: "upcoming", podium: false, participantIds: ["s_dhruv", "s_nathan", "s_farrel"] },
 ];
 
-// --- Leaderboard ------------------------------------------------------------
+// --- Achievements -----------------------------------------------------------
 
-export type LeaderboardEntry = {
-  memberId: string;
-  name: string;
-  club: string | null;
-  avatarInitials: string;
-  points: number;
-  badgeCount: number;
+export type BadgeId =
+  | "innovation"
+  | "leadership"
+  | "science_fair"
+  | "programmer"
+  | "engineering"
+  | "robotics_finalist"
+  | "peer_coach";
+
+export type BadgeDef = { id: BadgeId; name: string; description: string };
+
+export const BADGE_DEFS: BadgeDef[] = [
+  { id: "innovation", name: "Innovation Award", description: "Took an original idea from sketch to a working demo." },
+  { id: "leadership", name: "STEM Leadership Award", description: "Led a project team through a full term." },
+  { id: "science_fair", name: "Science Fair Winner", description: "Placed first at a school or inter-school science fair." },
+  { id: "programmer", name: "Outstanding Programmer", description: "Wrote and shipped the code behind a club project." },
+  { id: "engineering", name: "Best Engineering Design", description: "Designed and built a physical system that works end to end." },
+  { id: "robotics_finalist", name: "Robotics Competition Finalist", description: "Reached the finals of a robotics competition." },
+  { id: "peer_coach", name: "Peer Coach", description: "Ran sessions to bring newer members up to speed." },
+];
+
+export type StudentAchievement = { badgeId: BadgeId; earnedAt: string; note?: string };
+
+export const mockAchievements: Record<string, StudentAchievement[]> = {
+  u_student: [
+    { badgeId: "programmer", earnedAt: "2026-03-06", note: "Autonomous Robot firmware and calibration routine" },
+    { badgeId: "engineering", earnedAt: "2026-04-17", note: "Five-sensor array and bracket redesign" },
+    { badgeId: "robotics_finalist", earnedAt: "2026-05-09", note: "Indonesia Robotics Olympiad — Jakarta regional" },
+    { badgeId: "peer_coach", earnedAt: "2026-06-12", note: "Ran the Grade 8 Arduino starter sessions" },
+  ],
+  s_rohan: [
+    { badgeId: "leadership", earnedAt: "2025-09-01", note: "Project leader, Autonomous Robot" },
+    { badgeId: "engineering", earnedAt: "2026-02-20" },
+    { badgeId: "robotics_finalist", earnedAt: "2026-05-09" },
+  ],
+  s_vivaan: [
+    { badgeId: "leadership", earnedAt: "2025-09-01", note: "Project leader, AI Waste Classification" },
+    { badgeId: "programmer", earnedAt: "2026-03-20" },
+    { badgeId: "innovation", earnedAt: "2026-06-05" },
+  ],
+  s_kiara: [
+    { badgeId: "leadership", earnedAt: "2025-09-01", note: "Project leader, Solar Tracking System" },
+    { badgeId: "engineering", earnedAt: "2026-06-13", note: "National Electronics Design Contest" },
+    { badgeId: "peer_coach", earnedAt: "2026-05-18", note: "Arduino Bootcamp instructor" },
+  ],
+  s_dhruv: [
+    { badgeId: "leadership", earnedAt: "2025-09-01", note: "Project leader, Bridge Engineering Challenge" },
+    { badgeId: "engineering", earnedAt: "2026-05-30" },
+  ],
+  s_meera: [
+    { badgeId: "leadership", earnedAt: "2025-09-01", note: "Project leader, Research Paper Repository" },
+    { badgeId: "science_fair", earnedAt: "2026-04-25", note: "National Science Project Olympiad — 1st place" },
+  ],
+  s_ethan: [{ badgeId: "programmer", earnedAt: "2026-02-28", note: "Attendance Portal check-in service" }],
+  s_kevin: [{ badgeId: "leadership", earnedAt: "2026-04-20", note: "Project leader, Drone Mapping" }],
+  s_priyanka: [{ badgeId: "leadership", earnedAt: "2026-02-16", note: "Project leader, Pepper's Ghost Hologram" }],
+  s_hana: [{ badgeId: "leadership", earnedAt: "2026-04-06", note: "Project leader, Smart Irrigation" }],
+  s_yusuf: [{ badgeId: "leadership", earnedAt: "2026-02-02", note: "Project leader, IoT Weather Station" }],
+  s_bastian: [
+    { badgeId: "leadership", earnedAt: "2026-03-23", note: "Project leader, Air Quality Data Study" },
+    { badgeId: "science_fair", earnedAt: "2026-04-25" },
+  ],
+  s_sanya: [{ badgeId: "programmer", earnedAt: "2026-04-10" }],
+  s_clara: [{ badgeId: "innovation", earnedAt: "2026-03-14" }],
+  s_ishaan: [{ badgeId: "peer_coach", earnedAt: "2026-06-12" }],
+  s_aditi: [{ badgeId: "engineering", earnedAt: "2026-06-13" }],
+  s_sekar: [{ badgeId: "innovation", earnedAt: "2026-05-22" }],
+  s_yerin: [{ badgeId: "science_fair", earnedAt: "2026-06-20" }],
 };
 
-export const mockLeaderboard: LeaderboardEntry[] = mockMembers
-  .filter((m) => m.role === "student")
-  .map((m, i) => {
-    const badgeCount = (mockStudentAchievements[m.id] ?? []).length;
-    const base = Math.round(seededRandom(i + 700) * 500);
-    return {
-      memberId: m.id,
-      name: m.name,
-      club: m.club,
-      avatarInitials: m.avatarInitials,
-      points: base + badgeCount * 150 + (m.clubRole === "leader" ? 200 : 0),
-      badgeCount,
-    };
-  })
-  .sort((a, b) => b.points - a.points);
+// --- Student profile --------------------------------------------------------
 
-// --- Notifications (expanded, typed) ---------------------------------------
+export type Skill = { name: string; level: number; category: string };
 
-export type NotificationType = "grade" | "invite" | "mention" | "event" | "achievement" | "message";
+export const mockSkills: Record<string, Skill[]> = {
+  u_student: [
+    { name: "Arduino / Embedded C", level: 4, category: "Programming" },
+    { name: "Python", level: 4, category: "Programming" },
+    { name: "CAD (Fusion 360)", level: 3, category: "Design" },
+    { name: "Soldering", level: 4, category: "Hardware" },
+    { name: "Sensor Calibration", level: 4, category: "Hardware" },
+    { name: "Data Logging & Analysis", level: 3, category: "Research" },
+    { name: "Public Speaking", level: 3, category: "Communication" },
+  ],
+};
 
-export type FullNotification = {
+export type Certificate = { id: string; title: string; issuer: string; date: string };
+
+export const mockCertificates: Record<string, Certificate[]> = {
+  u_student: [
+    { id: "cert1", title: "Arduino Fundamentals", issuer: "GMIS STEM Club", date: "2026-02-13" },
+    { id: "cert2", title: "Introduction to Robotics", issuer: "Coursera", date: "2025-11-21" },
+    { id: "cert3", title: "Lab Safety & Soldering Certification", issuer: "GMIS Science Department", date: "2025-09-05" },
+  ],
+};
+
+export type StudentProfile = {
+  studentId: string;
+  headline: string;
+  about: string;
+  location: string;
+  email: string;
+};
+
+export const mockProfiles: Record<string, StudentProfile> = {
+  u_student: {
+    studentId: "u_student",
+    headline: "Grade 11 · GMIS STEM Club",
+    about:
+      "I build competition robots with the GMIS STEM Club and own the sensor array on our Autonomous Robot project. Most of my time goes into embedded C, sensor calibration, and working out why the control loop overshoots on tight corners. I want to study mechatronics engineering, and on Wednesdays I coach the Grade 8 Arduino starter sessions.",
+    location: "Jakarta Timur, Indonesia",
+    email: "anaya.kapoor@student.gmis.sch.id",
+  },
+};
+
+// --- Notifications ----------------------------------------------------------
+// Only events the app can actually produce today: tasks, announcements,
+// events, competition deadlines, and resource uploads.
+
+export type NotificationType =
+  | "task_assigned"
+  | "task_completed"
+  | "announcement"
+  | "event_reminder"
+  | "competition_deadline"
+  | "resource_uploaded";
+
+export type Notification = {
   id: string;
   type: NotificationType;
   title: string;
@@ -627,125 +931,67 @@ export type FullNotification = {
   unread: boolean;
 };
 
-export const mockFullNotifications: FullNotification[] = [
-  { id: "fn1", type: "achievement", title: "New badge earned", body: "You earned the Team Leader badge for Robotics Club.", time: "12m ago", unread: true },
-  { id: "fn2", type: "grade", title: "Assignment graded", body: "Regional Qualifier Design Doc — 92/100", time: "2h ago", unread: true },
-  { id: "fn3", type: "message", title: "New message from Aditya Pratama", body: "\"Can you check the sensor calibration numbers before Thursday?\"", time: "3h ago", unread: true },
-  { id: "fn4", type: "event", title: "Event reminder", body: "Regional Robotics Qualifier is tomorrow at 07:00.", time: "5h ago", unread: false },
-  { id: "fn5", type: "mention", title: "Mentioned in Companion App design review", body: "Bagus Anggraini mentioned you in a comment.", time: "1d ago", unread: false },
-  { id: "fn6", type: "invite", title: "Aditya Pratama invited you", body: "Join Robotics Club as a member", time: "1d ago", unread: false },
-  { id: "fn7", type: "achievement", title: "New badge earned", body: "You earned the Champion badge for placing 1st at the Regional Qualifier.", time: "3d ago", unread: false },
-  { id: "fn8", type: "event", title: "New event", body: "STEM Club Fair added to the school calendar.", time: "5d ago", unread: false },
+export const mockNotifications: Notification[] = [
+  { id: "n1", type: "task_assigned", title: "Task assigned", body: "Tune the control loop on the practice track — Autonomous Robot", time: "18m ago", unread: true },
+  { id: "n2", type: "announcement", title: "Announcement posted", body: "Workshop registration opens: Sensors & Motor Drivers", time: "2h ago", unread: true },
+  { id: "n3", type: "task_completed", title: "Task completed", body: "Kevin Tanuwijaya finished “Mount the camera gimbal” — Drone Mapping", time: "5h ago", unread: true },
+  { id: "n4", type: "event_reminder", title: "Event reminder", body: "Weekly STEM Club Meeting — Wednesday 15:30, Science Block Lab 2", time: "1d ago", unread: false },
+  { id: "n5", type: "competition_deadline", title: "Competition deadline", body: "Inter-school STEM Competition roster closes 20 August", time: "2d ago", unread: false },
+  { id: "n6", type: "resource_uploaded", title: "Resource uploaded", body: "Autonomous Robot Wiring Diagram.png added to the library", time: "5d ago", unread: false },
 ];
 
-// --- Messaging ---------------------------------------------------------------
+// --- Recent activity --------------------------------------------------------
+// Derived from the fixtures above rather than invented, so the club feed can
+// never contradict the pages it summarises.
 
-export type ConversationType = "dm" | "project" | "announcement";
-
-export type ChatMessage = {
+export type ActivityItem = {
   id: string;
-  author: string;
-  authorInitials: string;
-  body: string;
-  time: string;
+  kind: "announcement" | "resource" | "competition" | "event";
+  text: string;
+  actor: string;
+  date: string;
 };
 
-export type Conversation = {
-  id: string;
-  type: ConversationType;
-  title: string;
-  subtitle: string;
-  lastMessage: string;
-  lastTime: string;
-  unread: number;
-  messages: ChatMessage[];
+export const mockActivity: ActivityItem[] = [
+  ...mockAnnouncements.map((a) => ({
+    id: `act_${a.id}`,
+    kind: "announcement" as const,
+    text: `Posted “${a.title}”`,
+    actor: a.author,
+    date: a.date,
+  })),
+  ...mockResources.map((r) => ({
+    id: `act_${r.id}`,
+    kind: "resource" as const,
+    text: `Uploaded ${r.title}`,
+    actor: r.uploadedBy,
+    date: r.date,
+  })),
+  ...mockCompetitions
+    .filter((c) => c.status === "completed")
+    .map((c) => ({
+      id: `act_${c.id}`,
+      kind: "competition" as const,
+      text: `${c.name} — ${c.result}`,
+      actor: mockSchool.clubName,
+      date: c.date,
+    })),
+].sort((a, b) => (a.date < b.date ? 1 : -1));
+
+// --- Club-wide counts -------------------------------------------------------
+// Every headline number in the app reads from here, so nothing can drift out
+// of step with the data it claims to describe.
+
+export const clubStats = {
+  students: mockStudents.length,
+  activeStudents: mockStudents.filter((s) => s.status === "active").length,
+  pendingApplications: mockStudents.filter((s) => s.status === "invited").length,
+  projects: mockProjects.length,
+  activeProjects: mockProjects.filter((p) => p.status === "active").length,
+  completedProjects: mockProjects.filter((p) => p.status === "completed").length,
+  competitions: mockCompetitions.length,
+  upcomingCompetitions: mockCompetitions.filter((c) => c.status === "upcoming").length,
+  resources: mockResources.length,
+  announcements: mockAnnouncements.length,
+  upcomingEvents: mockEvents.filter((e) => e.date >= DEMO_TODAY).length,
 };
-
-export const mockConversations: Conversation[] = [
-  {
-    id: "conv1",
-    type: "dm",
-    title: "Aditya Pratama",
-    subtitle: "Robotics Club Leader",
-    lastMessage: "Can you check the sensor calibration numbers before Thursday?",
-    lastTime: "3h ago",
-    unread: 2,
-    messages: [
-      { id: "m1", author: "Aditya Pratama", authorInitials: "AP", body: "Hey! How's the sensor calibration going?", time: "10:02 AM" },
-      { id: "m2", author: "Sofia Kim", authorInitials: "SK", body: "Almost done — getting some drift on sensor 3.", time: "10:05 AM" },
-      { id: "m3", author: "Aditya Pratama", authorInitials: "AP", body: "Can you check the sensor calibration numbers before Thursday?", time: "10:07 AM" },
-    ],
-  },
-  {
-    id: "conv2",
-    type: "dm",
-    title: "Bu Rina Wijaya",
-    subtitle: "School Admin",
-    lastMessage: "Great work on the design doc — 92/100.",
-    lastTime: "2h ago",
-    unread: 0,
-    messages: [
-      { id: "m4", author: "Bu Rina Wijaya", authorInitials: "RW", body: "Great work on the design doc — 92/100.", time: "9:00 AM" },
-      { id: "m5", author: "Sofia Kim", authorInitials: "SK", body: "Thank you, Bu! Appreciate the feedback on the wiring section.", time: "9:12 AM" },
-    ],
-  },
-  {
-    id: "conv3",
-    type: "project",
-    title: "Line-Following Robot v3",
-    subtitle: "Robotics Club · 5 members",
-    lastMessage: "Putri: pushed the new sensor mount STL to resources.",
-    lastTime: "1h ago",
-    unread: 1,
-    messages: [
-      { id: "m6", author: "Putri Wibowo", authorInitials: "PW", body: "Pushed the new sensor mount STL to resources.", time: "8:45 AM" },
-      { id: "m7", author: "Hana Pratama", authorInitials: "HP", body: "Printing it tonight, should be ready by practice.", time: "8:50 AM" },
-    ],
-  },
-  {
-    id: "conv4",
-    type: "project",
-    title: "STEMORA Companion App",
-    subtitle: "Code Collective · 4 members",
-    lastMessage: "Bagus: onboarding flow review moved to Thursday.",
-    lastTime: "1d ago",
-    unread: 0,
-    messages: [
-      { id: "m8", author: "Bagus Anggraini", authorInitials: "BA", body: "Onboarding flow review moved to Thursday.", time: "Yesterday" },
-    ],
-  },
-  {
-    id: "conv5",
-    type: "announcement",
-    title: "Robotics Club",
-    subtitle: "Club announcements",
-    lastMessage: "Regional Qualifier is next Saturday — bring charged batteries.",
-    lastTime: "1d ago",
-    unread: 1,
-    messages: [
-      { id: "m9", author: "Aditya Pratama", authorInitials: "AP", body: "Regional Qualifier is next Saturday — bring charged batteries and be at the gate by 7am.", time: "Yesterday" },
-    ],
-  },
-  {
-    id: "conv6",
-    type: "announcement",
-    title: "SMA Negeri 8 Jakarta",
-    subtitle: "School-wide announcements",
-    lastMessage: "STEM Club Fair — sign up to table by Friday.",
-    lastTime: "2d ago",
-    unread: 0,
-    messages: [
-      { id: "m10", author: "Bu Rina Wijaya", authorInitials: "RW", body: "All clubs are invited to table at the September STEM fair.", time: "2 days ago" },
-    ],
-  },
-];
-
-// --- Public portfolio lookup -------------------------------------------------
-
-export function getPublicProfileByHandle(handle: string) {
-  const profile = Object.values(mockStudentProfiles).find((p) => p.handle === handle);
-  if (!profile) return null;
-  const member = mockMembers.find((m) => m.id === profile.memberId);
-  if (!member) return null;
-  return { profile, member };
-}

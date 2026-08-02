@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
+import { siteConfig } from "@/config/site";
 
 const display = Space_Grotesk({
   variable: "--font-display",
@@ -23,14 +24,12 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "STEMORA — The home base for STEM clubs",
-  description:
-    "One workspace for your school's STEM clubs — members, projects, competitions, events, resources, and announcements.",
+  title: `STEMORA — ${siteConfig.tagline}`,
+  description: siteConfig.description,
   openGraph: {
-    title: "STEMORA — The home base for STEM clubs",
-    description:
-      "One workspace for your school's STEM clubs — members, projects, competitions, events, resources, and announcements.",
-    siteName: "STEMORA",
+    title: `STEMORA — ${siteConfig.tagline}`,
+    description: siteConfig.description,
+    siteName: siteConfig.name,
     type: "website",
   },
 };

@@ -19,14 +19,12 @@ decorative animation.
 
 | Component | Notes |
 |---|---|
-| `DataTable` | Sortable, filterable, paginated; column defs typed generically; used for member lists, admin school lists, grading queues. |
+| `DataTable` | Searchable, paginated; column defs typed generically; used for the student roster and the resource library. |
 | `Sidebar` | Collapsible, role-aware nav (reads `config/navigation.ts`), active-state highlighting. |
-| `Navbar` / `Topbar` | School switcher, global search trigger, notification bell, avatar menu. |
-| `SearchBar` | Debounced, keyboard-navigable, used standalone and inside `Command` palette. |
-| `Filters` | Composable filter chips + panel (role, category, status, date range) driving URL search params. |
-| `Charts` | Recharts wrappers: `LineChart`, `BarChart`, `DonutChart` pre-themed, used in dashboards/analytics. |
-| `Card` | Base surface used everywhere (club card, project card, event card). |
-| `StatCard` | Metric + delta + sparkline, used on dashboards. |
+| `Navbar` / `Topbar` | Theme toggle, notification bell, persona menu. |
+| `CategoryFilter` | One filter over project categories, shared by Projects, Resources, and Competitions. Categories describe work, never groups students join. |
+| `Card` | Base surface used everywhere (project card, event card, announcement card). |
+| `StatCard` | Metric + optional delta, used on dashboards. Every value it renders is derived from the data it describes. |
 | `Dialog` / `ConfirmDialog` | `ConfirmDialog` standardizes every destructive-action confirmation (type-to-confirm variant for irreversible actions like school deletion). |
 | `FormField` wrappers | React Hook Form + zod resolver bindings around `ui/*` inputs, with consistent label/error/description layout. |
 | `Dropdown` / `ActionMenu` | Row-level and page-level "..." menus. |
@@ -34,15 +32,14 @@ decorative animation.
 | `Pagination` | Cursor and offset variants sharing one visual component. |
 | `FileUpload` | Drag-drop + progress, wraps Supabase Storage resumable upload, emits `file_objects` row on completion. |
 | `NotificationBell` / `NotificationList` | Realtime-subscribed unread count + dropdown. |
-| `Calendar` | Month/week/agenda views, used by `/calendar` and club events. |
-| `Avatar` | With graceful initials fallback, presence-dot variant for chat. |
+| `Avatar` | With graceful initials fallback. |
 | `KanbanBoard` | Drag-and-drop columns/cards (dnd-kit), optimistic reordering. |
 | `EmptyState` | Icon + message + primary action, one component instance for every empty list in the product (never a bespoke one-off per page). |
 | `PageHeader` | Title + breadcrumb + primary actions, consistent across every top-level page. |
 | `Skeleton` variants | Table skeleton, card-grid skeleton, detail-page skeleton — matched to their real layout so loading states don't "jump." |
 
-- Feature-specific components (e.g. `AssignmentSubmitForm`,
-  `ClubMemberInviteDialog`, `ChannelMessageComposer`) live inside their owning
+- Feature-specific components (e.g. `ProjectBoardClient`,
+  `AnnouncementsView`, `CompetitionsView`) live inside their owning
   `features/*/components/` folder and compose the shared layer above — they
   are never duplicated into `components/shared` even if a similar shape
   appears in two features; genuine convergence gets promoted deliberately,
@@ -54,9 +51,10 @@ Every list/detail view implements, using the shared primitives above:
 
 - **Loading** — matched `Skeleton` variant, never a bare spinner for
   content-shaped views.
-- **Empty** — `EmptyState` with a role-appropriate primary action ("Create
-  your first club" for a school admin, "No clubs yet — ask your school admin" copy
-  variant for a student, same component, different props).
+- **Empty** — `EmptyState`, always explaining itself rather than showing a
+  bare table. Role-appropriate copy from the same component: "No projects have
+  been created yet" for a School Admin, "You're not on a project yet — ask your
+  School Admin to add you to a project team" for a Student.
 - **Error** — inline retry affordance for fetch failures; `error.tsx`
   boundary per route group for unhandled errors.
 - **Success** — `Toast` confirmation for mutations, optimistic UI where

@@ -10,10 +10,10 @@ stemora/
 ├── src/
 │   ├── app/                           # Next.js App Router — routing only, no business logic
 │   │   ├── (marketing)/               # public site, no auth required
-│   │   ├── (auth)/                    # login, signup, invite acceptance, onboarding
-│   │   ├── (platform-admin)/          # platform_owner console, cross-tenant
-│   │   ├── (app)/                     # authenticated, tenant-scoped app
-│   │   │   └── [schoolSlug]/          # present only in path-based dev fallback; see multi-tenancy.md
+│   │   ├── (auth)/                    # login, password reset, school registration
+│   │   ├── platform/                  # platform_owner console, cross-tenant
+│   │   ├── school/                    # school_admin — the school's one STEM Club
+│   │   ├── student/                   # student — their view of the same club
 │   │   ├── api/
 │   │   │   └── v1/                    # Route Handlers, thin — delegate to features/*/server
 │   │   ├── layout.tsx
@@ -28,25 +28,26 @@ stemora/
 │   │   │   ├── hooks/                 # useSession, useOnboardingState
 │   │   │   ├── schemas/               # zod schemas: LoginSchema, SignupSchema
 │   │   │   └── types.ts
-│   │   ├── schools/                   # school profile, settings, branding
-│   │   ├── clubs/
-│   │   ├── classroom/                 # announcements, assignments, submissions, materials
-│   │   ├── projects/                  # project spaces, kanban boards/cards
-│   │   ├── messaging/                 # channels, messages, DMs
-│   │   ├── wiki/
-│   │   ├── events/
-│   │   ├── profiles/                  # LinkedIn-like profiles, achievements, follows
+│   │   ├── schools/                   # school profile, STEM Club settings
+│   │   ├── students/                  # the club roster, invitations
+│   │   ├── projects/                  # projects, teams, kanban boards, tasks
+│   │   ├── competitions/              # the competition register
+│   │   ├── events/                    # meetings, workshops, showcases
+│   │   ├── resources/                 # the club library
+│   │   ├── announcements/
+│   │   ├── profiles/                  # student profiles, skills, achievements
 │   │   ├── notifications/
-│   │   ├── search/
-│   │   ├── admin/                     # platform_owner: school management, billing, analytics
-│   │   ├── audit/
-│   │   └── billing/                   # Stripe integration
+│   │   ├── platform/                  # platform_owner: the schools on STEMORA
+│   │   └── audit/
+
+There is no `clubs` feature folder, because a club is not an entity — the
+school is the club. Subject areas live as a `category` column on a project.
 │   │
 │   ├── components/
 │   │   ├── ui/                        # shadcn/ui primitives (button, dialog, input, ...) — generated, rarely hand-edited
-│   │   └── shared/                    # composed, reusable across features: DataTable, Sidebar, Navbar,
-│   │                                   # SearchBar, Filters, Charts, Cards, StatCard, Pagination, FileUpload,
-│   │                                   # NotificationBell, Calendar, Avatar, KanbanBoard, StatusBadge, EmptyState
+│   │   └── shared/                    # composed, reusable across features: DataTable, CategoryFilter,
+│   │                                   # StatCard, PageHeader, KanbanBoard, StatusBadge, EmptyState,
+│   │                                   # NotificationBell, Avatar
 │   │
 │   ├── lib/
 │   │   ├── supabase/
@@ -63,7 +64,6 @@ stemora/
 │   │   │   ├── response.ts            # standard success/error envelope
 │   │   │   └── rate-limit.ts
 │   │   ├── validation/                # shared zod primitives (pagination, ids, dates)
-│   │   ├── stripe.ts
 │   │   ├── resend.ts
 │   │   ├── posthog.ts
 │   │   ├── sentry.ts
@@ -83,7 +83,7 @@ stemora/
 │
 ├── supabase/
 │   ├── migrations/                      # timestamped SQL migrations (source of truth for schema)
-│   ├── functions/                       # Edge Functions: stripe-webhook, send-invite-email, digest-emails
+│   ├── functions/                       # Edge Functions: send-invite-email, event-reminders
 │   ├── seed.sql                         # demo/dev seed data only
 │   └── config.toml
 │
@@ -102,13 +102,13 @@ stemora/
 
 ## Why feature-first
 
-- A `features/classroom/server/actions.ts` file contains every mutation
-  (create assignment, submit work, grade submission) with its authorization and
+- A `features/projects/server/actions.ts` file contains every mutation
+  (create project, add a task, move a task) with its authorization and
   validation inline. A route handler or Server Action calls into it; a
   component never imports Supabase directly.
 - `components/shared` holds only *generic, domain-agnostic* components. The
-  moment a component needs to know what a "club" or "assignment" is, it belongs
-  in the owning feature's `components/` folder instead.
+  moment a component needs to know what a "project" or "competition" is, it
+  belongs in the owning feature's `components/` folder instead.
 - Deleting a feature folder should be sufficient to remove that feature from
   the product (minus its DB migration and nav entry) — a concrete test of
   whether coupling has leaked across boundaries.
@@ -119,7 +119,7 @@ stemora/
   `features/*/server/queries.ts`.
 - Anything with `useState`, `useEffect`, event handlers, or React Query:
   explicit `"use client"`, kept as small and as low in the tree as possible
-  (e.g. `AssignmentSubmitForm`, not the whole assignment page).
+  (e.g. `ProjectBoardClient`, not the whole project page).
 - Server Actions (`"use server"`) live in `features/*/server/actions.ts` and are
   the only way client components mutate data — no client-side direct Supabase
-  writes outside of realtime subscriptions (messaging, notifications).
+  writes.

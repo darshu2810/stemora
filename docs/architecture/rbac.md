@@ -2,67 +2,63 @@
 
 ## Roles
 
-The MVP ships **three** user roles and nothing else. Two independent role
-dimensions:
+STEMORA ships **three** roles and nothing else. There are no officers,
+mentors, teachers, coordinators, moderators, sponsors, or judges — and no
+club role, because a school has exactly one STEM Club and every student in the
+workspace is in it.
 
 1. **Platform role** (`users.platform_role`): `member` (default) or
-   `platform_owner`. Platform owner is a global super-admin (STEMORA staff),
-   unrelated to any single school.
+   `platform_owner`. Platform Owner is STEMORA staff, unrelated to any single
+   school, and never sees a school's internal data.
 2. **School role** (`school_members.role`, per `user_role` enum):
    `school_admin` > `student`.
-3. **Club role** (`club_members.role`): `leader` > `member` — scoped *within a
-   single club*, layered on top of the school role (a `student` can be a club
-   `leader`; that grants club-management rights for that club only, never
-   school-wide rights).
 
 ```
 platform_owner                         (cross-tenant, STEMORA staff)
-   └── school_admin                    (full control of one school)
-         └── student                   (participant)
-
-within a club, independent of the above:
-club leader > club member
+   └── school_admin                    (full control of one school's STEM Club)
+         └── student                   (member of that STEM Club)
 ```
 
-`config/roles.ts` is the single source of truth for the hierarchy order (used
-by `has_school_role()` in Postgres and by the identical TypeScript
-`hasRole()` helper — kept in lockstep intentionally, see enforcement layers
-below).
+### Project leader is not a role
+
+A project has a `leader_id` pointing at a student on its team. That grants
+nothing at the account level: the student signs in as a Student, sees the same
+navigation as every other student, and cannot manage the club. It exists so the
+roster of a project says who is coordinating it.
+
+`config/roles.ts` is the single source of truth for role labels and the
+dashboard each role lands on.
 
 ## Who can invite whom
 
 | Inviter | Can invite as |
 |---|---|
-| `school_admin` | school_admin, student |
-| `student` who is a club leader | student (club-scoped invite only) |
+| `school_admin` | student |
 | `student` | — (cannot invite) |
+
+A school's first `school_admin` is created when the school is registered; see
+[authentication.md](authentication.md).
 
 ## Permission matrix
 
-`Manage` = create/update/delete/assign roles. `Contribute` = create/update own
-content. `View` = read only. Cells are the **minimum** role required; higher
-roles inherit.
+`Manage` = create/update/delete. `Contribute` = create/update own content.
+`View` = read only. Cells are the **minimum** role required; higher roles
+inherit. Every row is scoped to a single school's STEM Club.
 
 | Resource | Manage | Contribute | View |
 |---|---|---|---|
-| School settings/branding | school_admin | — | school_admin |
-| School members (invite/remove/role) | school_admin | — | school_admin |
-| Clubs (create/archive) | school_admin | — | all members |
-| Club membership/roles | school_admin, club leader | — | club members |
-| Announcements | school_admin, club leader | club leader | club members |
-| Assignments | school_admin, club leader | — | club members |
-| Submissions (grade) | school_admin, club leader | student (own submission only) | school_admin/club leader (all), student (own) |
-| Materials | school_admin, club leader | all club members | club members |
-| Project spaces / boards / cards | school_admin, club leader | all club members | club members |
-| Channels (create/archive) | school_admin, club leader | — | club members |
-| Messages | author (edit/delete own) | all club members | club members |
-| Wiki pages | school_admin, club leader | all club members | club members |
-| Events | school_admin, club leader | — | all school members |
-| Profiles | self | self | all school members (public fields) |
-| Achievements (award) | school_admin, club leader | — | all |
+| School + STEM Club settings | school_admin | — | school_admin |
+| Students (invite/remove) | school_admin | — | school_admin, student |
+| Projects (create/archive, set category, leader, team) | school_admin | — | all students |
+| Project tasks (add/delete) | school_admin | move own task across the board | all students |
+| Competitions (create, set roster, record result) | school_admin | — | all students |
+| Events (add/cancel) | school_admin | — | all students |
+| Resources | school_admin | — | all students |
+| Announcements | school_admin | — | all students |
+| Achievements (award) | school_admin | — | all students |
+| Profile | self | self | all students |
 | Audit log | school_admin | — | school_admin |
-| Billing | school_admin | — | school_admin |
-| Platform admin console | platform_owner | — | platform_owner |
+| Platform console (school list) | platform_owner | — | platform_owner |
 
 This table is the spec for both the RLS policies in
 [database-schema.md](database-schema.md#row-level-security-strategy) and the
@@ -79,19 +75,19 @@ changes one updates the other in the same PR.
    `lib/auth/permissions.ts` *before* touching the database — not for
    security alone, but to return clean 403s with useful messages instead of
    relying on a raw Postgres RLS rejection reaching the client.
-3. **Client (UI).** Components hide/disable actions the user can't perform,
-   purely for UX — never trusted as the actual gate. Every "why is this
-   button greyed out" is backed by a server check, and the reverse (button
-   hidden, but action still blocked server-side if somehow triggered) always
-   holds.
+3. **Client (UI).** Components hide or disable actions the user can't perform,
+   purely for UX — never trusted as the actual gate. In this codebase that is
+   the `canManage` prop threaded through the shared views: it decides whether
+   the "Create Project" / "Add Event" / "Post Announcement" affordances render,
+   and the server check behind them is what actually enforces it.
 
 ```ts
 // lib/auth/permissions.ts (shape, not final implementation)
 type Action = 'manage' | 'contribute' | 'view';
-type Resource = 'club' | 'assignment' | 'submission' | 'channel' | ...;
+type Resource = 'school' | 'project' | 'task' | 'competition' | 'resource' | 'event' | 'announcement';
 
 export function can(
-  membership: { schoolRole: UserRole; clubRole?: ClubMemberRole },
+  membership: { schoolRole: UserRole },
   action: Action,
   resource: Resource,
   context?: { resourceOwnerId?: string; userId?: string }
@@ -104,19 +100,16 @@ export async function requireRole(minRole: UserRole): Promise<Session>; // throw
 
 Some permissions aren't purely role-based:
 
-- A `student` can always view/edit **their own** submission, regardless of
-  club role.
-- A club `leader` can manage submissions only for assignments **in the club
-  they lead** — leading one club never implies access to another; the
-  `club_members` row is what grants it.
-- A user can always edit/delete **their own** messages and wiki edits; club
-  leaders can moderate (delete) anyone's.
+- A `student` can always view and edit **their own** profile, skills, and
+  certificates.
+- A `student` assigned a task can move that task across their project's board
+  without being able to create or delete tasks.
 
 These are expressed as additional `using`/`with check` clauses in RLS (row
 ownership via `author_id = auth.uid()` OR role check), not as a separate
 system.
 
-## Impersonation (support tooling, Phase 5+)
+## Impersonation (support tooling, post-pilot)
 
 `platform_owner` may open a read-mostly "view as" session for support
 purposes. This is never a silent auth bypass: it requires an explicit

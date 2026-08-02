@@ -1,5 +1,12 @@
-import { isEnabled } from "@/config/features";
-
+// The three roles in STEMORA, and nothing else.
+//
+//   Platform Owner — STEMORA staff, oversees the schools on the platform.
+//   School Admin   — runs their school's STEM Club.
+//   Student        — a member of their school's STEM Club.
+//
+// A project leader is an attribute of a project, not a role: that student
+// still signs in as a Student. There are no officers, mentors, teachers,
+// coordinators, or judges.
 export type UserRole = "platform_owner" | "school_admin" | "student";
 
 export const ROLE_LABELS: Record<UserRole, string> = {
@@ -8,31 +15,24 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   student: "Student",
 };
 
-// Order matters: index = seniority (0 is highest). Single source of truth for
-// hierarchy checks — mirrors the has_school_role() Postgres helper described
-// in docs/architecture/database-schema.md.
-export const ROLE_HIERARCHY: UserRole[] = ["platform_owner", "school_admin", "student"];
+export const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
+  platform_owner: "STEMORA staff. Sees the schools on the platform, never a school's internal data.",
+  school_admin: "Runs the school's STEM Club — students, projects, competitions, resources, events, and announcements.",
+  student: "A member of the STEM Club. Works on projects, tracks tasks, and enters competitions.",
+};
 
-export function hasRole(current: UserRole, minRole: UserRole): boolean {
-  return ROLE_HIERARCHY.indexOf(current) <= ROLE_HIERARCHY.indexOf(minRole);
-}
+// Every role, most senior first.
+export const ALL_ROLES: UserRole[] = ["platform_owner", "school_admin", "student"];
 
-// Roles a pilot school actually signs in as. platform_owner is deliberately
-// absent: the super-admin console is parked for the MVP (features.platformConsole),
-// so there is nowhere for that persona to land.
-export const PREVIEW_ROLES: UserRole[] = ROLE_HIERARCHY.filter(
-  (role) => role !== "platform_owner" || isEnabled("platformConsole"),
-);
+// Roles that exist inside a school's workspace. Platform Owner is STEMORA
+// staff and is never a member of a school's STEM Club.
+export const SCHOOL_ROLES: UserRole[] = ["school_admin", "student"];
 
-// Roles that can be held inside a school workspace. platform_owner is STEMORA
-// staff, never a school member.
-export const SCHOOL_ROLES: UserRole[] = ROLE_HIERARCHY.filter((role) => role !== "platform_owner");
-
-// Which dashboard a given role lands on.
+// Which dashboard a given role lands on after signing in.
 export function dashboardForRole(role: UserRole): string {
   switch (role) {
     case "platform_owner":
-      return isEnabled("platformConsole") ? "/platform/dashboard" : "/school/dashboard";
+      return "/platform/dashboard";
     case "school_admin":
       return "/school/dashboard";
     case "student":

@@ -1,15 +1,33 @@
 # STEMORA — Platform Architecture
 
-Status: **DRAFT — awaiting approval. No application code has been written.**
 Owner: Lead Software Engineer / Product Designer / DevOps / Security / DB Architect (Claude)
-Last updated: 2026-08-01
+Last updated: 2026-08-03
 
-This document is the entry point into the full architecture set for STEMORA, the
-global platform for STEM Clubs (Google Classroom + GitHub + Discord + LinkedIn +
-Notion + Trello, purpose-built for STEM clubs, multi-tenant across schools).
+STEMORA is a STEM Club management platform. A school signs up, gets an isolated
+workspace, and runs **one** STEM Club inside it. The MVP is scoped to a single
+piloting school (GMIS Jakarta), with the same product expanding to more schools
+after the pilot.
 
-Per `stemora.md`, this is a planning deliverable only. Implementation begins only
-after this document (and its sub-documents) is explicitly approved.
+## The model
+
+```
+Platform          STEMORA staff — sees which schools are on the platform
+   ↓
+School            One isolated workspace, one School Admin
+   ↓
+ONE STEM Club     Everything below belongs directly to this club
+   ↓
+Students          Projects · Tasks · Competitions · Resources · Events · Announcements
+```
+
+There is no club table, no club id, and no way for a student to belong to two
+clubs — because there is only ever one. Subject areas (Robotics, Programming,
+Artificial Intelligence, Engineering, Electronics, Mathematics, Research,
+Physics, Environmental Science) are **project categories**: an attribute of a
+project, never a group students join.
+
+A project has a **project leader**. That is a property of the project, not a
+role on the account — the student still signs in as a Student.
 
 ## How this document set is organized
 
@@ -46,11 +64,8 @@ flowchart LR
         EF[Edge Functions<br/>webhooks, jobs, emails]
     end
 
-    Stripe[Stripe]
     Resend[Resend]
-    PostHog[PostHog]
     Sentry[Sentry]
-    Mapbox[Mapbox]
 
     Web --> MW --> API
     API --> Auth
@@ -58,46 +73,50 @@ flowchart LR
     API --> Storage
     API --> EF
     EF --> Resend
-    EF --> Stripe
-    Web -.telemetry.-> PostHog
     Web -.errors.-> Sentry
-    Web -.maps.-> Mapbox
 ```
 
-Core architectural commitments (non-negotiable, per `stemora.md`):
+## Core architectural commitments
 
-1. **Multi-tenant by construction.** Every tenant-owned table carries `school_id`. No query, index, or RLS policy is written without it. See [multi-tenancy.md](docs/architecture/multi-tenancy.md).
-2. **Authorization is server-side and DB-side, always.** Client-side role checks are UX sugar only. See [rbac.md](docs/architecture/rbac.md).
-3. **Feature-first, not layer-first.** Business logic lives in `features/*/server`, never in components. See [folder-structure.md](docs/architecture/folder-structure.md).
-4. **Every screen ships with loading / empty / error / success states**, permission checks, validation, and responsive + accessible markup, per the general rules in `stemora.md`.
-5. **Premium SaaS bar.** Visual and interaction quality target: Linear, Notion, Stripe, Apple, GitHub, Framer, Vercel.
+1. **One school, one STEM Club.** Every tenant-owned row carries `school_id`,
+   and `school_id` is the club boundary. No query, index, or RLS policy is
+   written without it. See [multi-tenancy.md](docs/architecture/multi-tenancy.md).
+2. **Three roles, no more.** `platform_owner`, `school_admin`, `student`.
+   See [rbac.md](docs/architecture/rbac.md).
+3. **Authorization is server-side and DB-side, always.** Client-side role checks
+   are UX sugar only.
+4. **Feature-first, not layer-first.** Business logic lives in `features/*/server`,
+   never in components. See [folder-structure.md](docs/architecture/folder-structure.md).
+5. **Every screen ships with loading / empty / error / success states**, permission
+   checks, validation, and responsive + accessible markup.
+6. **Every number is derived.** Counts and progress are computed from the data
+   they describe, never hand-written, so the UI cannot claim something the data
+   contradicts.
 
-## Roles supported
+## Feature scope
 
-`platform_owner`, `school_admin`, `student` — full detail in [rbac.md](docs/architecture/rbac.md).
-
-## Product domains (what "Google Classroom + GitHub + Discord + LinkedIn + Notion + Trello" means concretely)
-
-| Analogy | STEMORA feature area | MVP? |
+| Area | What it is | Status |
 |---|---|---|
-| Google Classroom | Assignments, submissions, grading, announcements, materials | Yes |
-| GitHub | Project spaces, file versions, issues/tasks | Phase 2 |
-| Trello | Kanban boards within project spaces | Phase 2 |
-| Discord | Club channels, real-time messaging | Phase 3 |
-| LinkedIn | Student profiles, skills, achievements, cross-school directory | Phase 4 |
-| Notion | Club wiki / docs pages | Phase 3 |
-| (Platform) | School onboarding, billing, platform admin, analytics | Phase 1 / Phase 5 |
+| Students | One roster for the club, by grade | MVP |
+| Projects | Category, team, project leader, deadline, kanban board | MVP |
+| Competitions | Register of entries, rosters, levels, and results | MVP |
+| Events | Meetings, workshops, showcases, competition days | MVP |
+| Resources | Files and links, filed by category | MVP |
+| Announcements | One message to the whole club, pinnable | MVP |
+| Achievements | Club awards earned by students | MVP |
+| Student profile | Skills, certificates, awards, projects shipped | MVP |
+| Platform console | Which schools are on STEMORA | MVP |
 
 Full detail in [milestones-and-roadmap.md](docs/architecture/milestones-and-roadmap.md).
 
-## Open decisions requiring your input before implementation
+## Open decisions
 
-These are choices with real trade-offs; the plan below picks a sensible default but you should confirm before build starts:
-
-1. **Tenant resolution: subdomain (`riverside.stemora.com`) vs. path-based (`stemora.com/riverside`).** Default chosen: **subdomain**, matching Notion/Linear/Slack conventions and giving cleaner branding per school. Path-based is simpler for local dev/custom-domain-less MVP. See [multi-tenancy.md](docs/architecture/multi-tenancy.md#tenant-resolution).
-2. **Custom domains per school (e.g. `stem.riversidehs.edu`)** — Phase 5 item, needs Vercel domain + Mapbox-style DNS verification flow. Confirm if needed for launch or can wait.
-3. **Real-time chat transport** — Supabase Realtime (Postgres CDC) vs. a dedicated service. Default: Supabase Realtime, reassessed at Phase 3 for scale.
-4. **Billing model** — per-school subscription (seats vs. flat) vs. platform-funded (free for schools, monetized elsewhere). This changes the `subscriptions` schema and platform-owner admin scope. Default assumed: per-school subscription via Stripe, billed to School Admin.
-5. **Data residency** — single Supabase project/region for all schools (default, simplest) vs. regional sharding for international schools. Default: single region at MVP, revisit if EU/education-data-residency requirements surface.
-
-Flag any of these you want changed; otherwise the defaults above are what the sub-documents assume.
+1. **Tenant resolution: subdomain (`gmis.stemora.com`) vs. path-based
+   (`stemora.com/gmis`).** Default chosen: **subdomain**. See
+   [multi-tenancy.md](docs/architecture/multi-tenancy.md#tenant-resolution).
+2. **Custom domains per school** — post-pilot; needs a Vercel domain + DNS
+   verification flow.
+3. **Data residency** — single Supabase project/region for all schools
+   (default, simplest) vs. regional sharding for international schools.
+   Default: single region, revisit if education-data-residency requirements
+   surface.

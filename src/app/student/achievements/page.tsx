@@ -10,30 +10,30 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
-import { cn } from "@/lib/utils";
-import { mockUsers, mockStudentAchievements, BADGE_DEFS, type BadgeId } from "@/lib/mock-data";
+import { cn, formatDate } from "@/lib/utils";
+import { mockSchool, mockUsers, mockAchievements, BADGE_DEFS, type BadgeId } from "@/lib/mock-data";
 
 const BADGE_ICONS: Record<BadgeId, LucideIcon> = {
-  innovator: Lightbulb,
-  team_leader: Users2,
-  researcher: FlaskConical,
+  innovation: Lightbulb,
+  leadership: Users2,
+  science_fair: FlaskConical,
   programmer: Code2,
-  engineer: Cog,
-  champion: Trophy,
-  volunteer: HeartHandshake,
+  engineering: Cog,
+  robotics_finalist: Trophy,
+  peer_coach: HeartHandshake,
 };
 
 export default function AchievementsPage() {
   const student = mockUsers.student;
-  const earned = mockStudentAchievements[student.id] ?? [];
+  const earned = mockAchievements[student.id] ?? [];
   const earnedMap = new Map(earned.map((a) => [a.badgeId, a]));
 
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow={student.club}
+        eyebrow={mockSchool.clubName}
         title="Achievements"
-        description={`${earned.length} of ${BADGE_DEFS.length} badges earned.`}
+        description={`${earned.length} of ${BADGE_DEFS.length} club awards earned.`}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -61,10 +61,12 @@ export default function AchievementsPage() {
               <p className="mt-1 text-xs text-muted-foreground">{badge.description}</p>
               {isEarned ? (
                 <p className="mt-3 font-mono text-[0.65rem] uppercase tracking-wider text-primary">
-                  Earned {record.earnedAt}
+                  Earned {formatDate(record.earnedAt)}
                 </p>
               ) : (
-                <p className="mt-3 font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">Locked</p>
+                <p className="mt-3 font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">
+                  Not earned yet
+                </p>
               )}
               {record?.note ? <p className="mt-1 text-xs text-muted-foreground">{record.note}</p> : null}
             </div>
