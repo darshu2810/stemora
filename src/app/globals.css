@@ -1,0 +1,187 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-display: var(--font-display);
+  --font-heading: var(--font-display);
+  --color-brand-spark: var(--brand-spark);
+  --color-brand-spark-foreground: var(--brand-spark-foreground);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* STEMORA brand: warm paper + ink, signal blue primary, amber "spark" secondary accent */
+  --background: #faf9f5;
+  --foreground: #14171c;
+  --card: #ffffff;
+  --card-foreground: #14171c;
+  --popover: #ffffff;
+  --popover-foreground: #14171c;
+  --primary: #3654ff;
+  --primary-foreground: #fafaff;
+  --secondary: #f0eee5;
+  --secondary-foreground: #14171c;
+  --muted: #f0eee5;
+  --muted-foreground: #6b6f76;
+  --accent: #fff1e2;
+  --accent-foreground: #7a3e0a;
+  --brand-spark: #ff8a2b;
+  --brand-spark-foreground: #2c1400;
+  --destructive: #e5484d;
+  --border: #e4e1d6;
+  --input: #e4e1d6;
+  --ring: #3654ff;
+  --chart-1: #3654ff;
+  --chart-2: #ff8a2b;
+  --chart-3: #1a9c7c;
+  --chart-4: #8b5cf6;
+  --chart-5: #6b6f76;
+  --radius: 0.625rem;
+  --sidebar: #f5f3ea;
+  --sidebar-foreground: #14171c;
+  --sidebar-primary: #3654ff;
+  --sidebar-primary-foreground: #fafaff;
+  --sidebar-accent: #eae7db;
+  --sidebar-accent-foreground: #14171c;
+  --sidebar-border: #e4e1d6;
+  --sidebar-ring: #3654ff;
+}
+
+.dark {
+  --background: #0b0d12;
+  --foreground: #f5f4f0;
+  --card: #12151c;
+  --card-foreground: #f5f4f0;
+  --popover: #12151c;
+  --popover-foreground: #f5f4f0;
+  --primary: #5b7cff;
+  --primary-foreground: #0b0d12;
+  --secondary: #1b1f28;
+  --secondary-foreground: #f5f4f0;
+  --muted: #1b1f28;
+  --muted-foreground: #9a9ea6;
+  --accent: #2a1e12;
+  --accent-foreground: #ffb870;
+  --brand-spark: #ffb870;
+  --brand-spark-foreground: #2c1400;
+  --destructive: #ff6b6f;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #5b7cff;
+  --chart-1: #5b7cff;
+  --chart-2: #ffb870;
+  --chart-3: #2fd6a8;
+  --chart-4: #a78bfa;
+  --chart-5: #9a9ea6;
+  --sidebar: #0e1015;
+  --sidebar-foreground: #f5f4f0;
+  --sidebar-primary: #5b7cff;
+  --sidebar-primary-foreground: #0b0d12;
+  --sidebar-accent: #1b1f28;
+  --sidebar-accent-foreground: #f5f4f0;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #5b7cff;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+@keyframes draw-line {
+  from {
+    stroke-dashoffset: 240;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  svg [style*="animation-delay"],
+  svg [class*="animate-"] {
+    animation: none !important;
+    opacity: 1 !important;
+    stroke-dashoffset: 0 !important;
+  }
+}
+
+/* subtle blueprint grid used behind the hero — grounded in the schematic-sheet layout concept */
+.bg-blueprint-grid {
+  background-image:
+    linear-gradient(to right, var(--color-border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-border) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, black 40%, transparent 100%);
+}
