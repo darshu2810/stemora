@@ -7,23 +7,18 @@ protected by Row Level Security.
 *is* the club boundary. There is no `clubs` table and no `club_id` — adding
 either would reintroduce a concept the product does not have.
 
-Inside that one club are **interest groups** — Robotics, Programming & AI,
-Electronics, Engineering & Design, Mathematics & Research. They are teams, not
-clubs: they have no members table of their own, no admin of their own, and no
-pages of their own. They exist to organise, filter, and assign.
+There are **no sub-teams**. Every student belongs to the one STEM Club, and
+that is the whole of the membership model. Students participate in *projects*;
+they do not belong to permanent groups.
 
-- A **student** belongs to exactly one (`school_members.interest_group_id`).
-  A **School Admin** runs the whole club and belongs to none. Both halves are
-  enforced by the `require_student_interest_group` trigger.
-- A **project** belongs to exactly one (`projects.interest_group_id`, NOT NULL).
-- **Events, announcements, and resources** carry a nullable
-  `interest_group_id`: null means the whole STEM Club.
-- A **competition** can involve several, via `competition_interest_groups`.
+`projects.category` (Robotics, Programming, AI, Electronics, Engineering,
+Mathematics, …) is **metadata describing the work**, not an organisational
+unit. Nobody is a member of a category. Events, announcements, competitions,
+and resources belong to the STEM Club as a whole.
 
-Every one of those foreign keys is composite — `(interest_group_id, school_id)`
-against `interest_groups (id, school_id)` — so a row can only ever point at a
-group inside its own school. Cross-school assignment is impossible in the
-schema, not merely discouraged in application code.
+This is deliberately the simplest model that serves the MVP. If permanent
+sub-teams are ever needed, they can be added in a later migration without
+disturbing any of the above.
 
 A project's leader is a column on the project, never a role on an account.
 
@@ -45,10 +40,10 @@ create type membership_status as enum ('invited', 'active', 'suspended', 'remove
 
 create type invitation_status as enum ('pending', 'accepted', 'expired', 'revoked');
 
--- There is no `project_category` enum. Subject areas are interest groups, which
--- are rows a School Admin can rename, reorder, add, and remove — not values
--- frozen into the type system. Two taxonomies over the same subject areas would
--- drift apart, so there is only one.
+create type project_category as enum (
+  'Robotics', 'Programming', 'Artificial Intelligence', 'Engineering',
+  'Electronics', 'Mathematics', 'Research', 'Physics', 'Environmental Science'
+);
 
 create type project_status as enum ('active', 'completed');
 
@@ -104,59 +99,6 @@ create table platform_audit_logs (
   created_at timestamptz not null default now()
 );
 create index platform_audit_logs_created_idx on platform_audit_logs (created_at desc);
-```
-
-## Interest groups
-
-### `interest_groups`
-```sql
-create table interest_groups (
-  id uuid primary key default gen_random_uuid(),
-  school_id uuid not null references schools(id) on delete cascade,
-  name text not null,
-  description text,
-  sort_order integer not null default 0,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  constraint interest_groups_name_not_blank check (length(trim(name)) > 0),
-  unique (school_id, name),
-  unique (id, school_id)   -- lets children prove same-school membership
-);
-
-create index interest_groups_school_idx on interest_groups (school_id, sort_order, name);
-```
-
-`register_school` seeds the five GMIS groups so a new school is usable
-immediately. That is reference data, like the badge list — the School Admin can
-rename, reorder, add, or delete them.
-
-Referential actions differ by what the row means without a group:
-
-| Table | On group delete | Why |
-|---|---|---|
-| `school_members` | `restrict` | a student cannot be left without a team |
-| `projects` | `restrict` | a project must belong to a group |
-| `events`, `announcements`, `resources` | `set null (interest_group_id)` | it simply becomes club-wide |
-| `competition_interest_groups` | `cascade` | the link row has no meaning alone |
-
-The `set null (interest_group_id)` form is Postgres 15+. It matters here: a
-plain `set null` on a composite key would also try to clear the `not null`
-`school_id` and fail at delete time.
-
-### `competition_interest_groups`
-```sql
-create table competition_interest_groups (
-  id uuid primary key default gen_random_uuid(),
-  school_id uuid not null references schools(id) on delete cascade,
-  competition_id uuid not null references competitions(id) on delete cascade,
-  interest_group_id uuid not null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (competition_id, interest_group_id),
-  constraint competition_interest_groups_group_fkey
-    foreign key (interest_group_id, school_id)
-    references interest_groups (id, school_id) on delete cascade
-);
 ```
 
 ## Identity

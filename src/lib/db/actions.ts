@@ -8,6 +8,7 @@ import type {
   CompetitionLevel,
   EventType,
   MembershipStatus,
+  ProjectCategory,
   ResourceType,
   TaskColumn,
   TaskPriority,
@@ -36,16 +37,13 @@ async function sendInviteEmail(
   fullName: string,
   schoolId: string,
   grade: number | null,
-  interestGroupId: string,
 ): Promise<string | null> {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   try {
     const admin = createAdminClient();
     const { error } = await admin.auth.admin.inviteUserByEmail(email, {
       redirectTo: `${siteUrl}/reset-password`,
-      // The interest group travels with the invitation, so accepting it places
-      // the student in their team in the same step.
-      data: { full_name: fullName, school_id: schoolId, grade, interest_group_id: interestGroupId },
+      data: { full_name: fullName, school_id: schoolId, grade },
     });
     if (error) throw error;
     return null;
@@ -67,14 +65,8 @@ export async function inviteStudent(_prev: ActionResult | undefined, fd: FormDat
   const gradeRaw = str(fd, "grade");
   const grade = gradeRaw ? Number(gradeRaw) : null;
 
-  const interestGroupId = str(fd, "interestGroupId");
-
   if (!email) return fail("Enter the student's school email.");
   if (!fullName) return fail("Enter the student's full name.");
-  // A student belongs to exactly one interest group, and the database enforces
-  // it. Catching it here means a clear message instead of a failure at the
-  // moment the student clicks the link in their email.
-  if (!interestGroupId) return fail("Choose the interest group this student is joining.");
 
   const supabase = await createClient();
 
@@ -102,7 +94,6 @@ export async function inviteStudent(_prev: ActionResult | undefined, fd: FormDat
     email,
     full_name: fullName,
     grade,
-    interest_group_id: interestGroupId,
     invited_by: session.userId,
   });
 
@@ -114,13 +105,7 @@ export async function inviteStudent(_prev: ActionResult | undefined, fd: FormDat
     );
   }
 
-  const emailError = await sendInviteEmail(
-    email,
-    fullName,
-    session.schoolId,
-    grade,
-    interestGroupId,
-  );
+  const emailError = await sendInviteEmail(email, fullName, session.schoolId, grade);
 
   if (emailError) {
     // The invitation is recorded either way; say plainly that the email didn't go.
@@ -149,16 +134,13 @@ export async function resendInvitation(_prev: ActionResult | undefined, fd: Form
 
   const { data: member } = await supabase
     .from("school_members")
-    .select("status, grade, interest_group_id, users(email, full_name)")
+    .select("status, grade, users(email, full_name)")
     .eq("school_id", session.schoolId)
     .eq("user_id", userId)
     .maybeSingle();
 
   if (!member) return fail("That person is no longer on the list.");
   if (member.status !== "invited") return fail("That invitation has already been accepted.");
-  if (!member.interest_group_id) {
-    return fail("That invitation has no interest group. Withdraw it and invite them again.");
-  }
 
   const user = member.users as unknown as { email: string; full_name: string };
   const email = user.email.toLowerCase();
@@ -179,17 +161,10 @@ export async function resendInvitation(_prev: ActionResult | undefined, fd: Form
     email,
     full_name: user.full_name,
     grade: member.grade,
-    interest_group_id: member.interest_group_id,
     invited_by: session.userId,
   });
 
-  const emailError = await sendInviteEmail(
-    email,
-    user.full_name,
-    session.schoolId,
-    member.grade,
-    member.interest_group_id,
-  );
+  const emailError = await sendInviteEmail(email, user.full_name, session.schoolId, member.grade);
   if (emailError) return fail(`Couldn't send the invitation email: ${emailError}`);
 
   revalidatePath("/school/students");
@@ -332,8 +307,6 @@ export async function createProject(_prev: ActionResult | undefined, fd: FormDat
   if (!dueDate) return fail("Choose a due date.");
 
   const leaderId = str(fd, "leaderId") || null;
-  const interestGroupId = str(fd, "interestGroupId");
-  if (!interestGroupId) return fail("Choose an interest group.");
 
   const { data, error } = await supabase
     .from("projects")
@@ -341,7 +314,7 @@ export async function createProject(_prev: ActionResult | undefined, fd: FormDat
       school_id: session.schoolId,
       name,
       description: str(fd, "description"),
-      interest_group_id: interestGroupId,
+      category: str(fd, "category") as ProjectCategory,
       due_date: dueDate,
       leader_id: leaderId,
       created_by: session.userId,
@@ -493,6 +466,7 @@ export async function createCompetition(_prev: ActionResult | undefined, fd: For
   const { error } = await supabase.from("competitions").insert({
     school_id: session.schoolId,
     name,
+    category: str(fd, "category") as ProjectCategory,
     level: str(fd, "level") as CompetitionLevel,
     event_date: date,
   });
@@ -633,13 +607,13 @@ export async function addResource(_prev: ActionResult | undefined, fd: FormData)
   if (!title) return fail("Enter a title.");
   if (type === "link" && !url) return fail("Enter the link address.");
 
-  // No group means the resource is shared with the whole STEM Club.
-  const interestGroupId = str(fd, "interestGroupId") || null;
+  // No category means a general club resource.
+  const category = str(fd, "category");
 
   const { error } = await supabase.from("resources").insert({
     school_id: session.schoolId,
     title,
-    interest_group_id: interestGroupId,
+    category: category ? (category as ProjectCategory) : null,
     type,
     url: type === "link" ? url : null,
     storage_path: type === "file" ? str(fd, "storagePath") || `pending/${title}` : null,

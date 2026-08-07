@@ -6,6 +6,17 @@
 export type UserRoleEnum = "platform_owner" | "school_admin" | "student";
 export type MembershipStatus = "invited" | "active" | "suspended" | "removed";
 export type InvitationStatus = "pending" | "accepted" | "expired" | "revoked";
+/** Metadata describing a project's subject area — not an organisational unit. */
+export type ProjectCategory =
+  | "Robotics"
+  | "Programming"
+  | "Artificial Intelligence"
+  | "Engineering"
+  | "Electronics"
+  | "Mathematics"
+  | "Research"
+  | "Physics"
+  | "Environmental Science";
 export type ProjectStatus = "active" | "completed";
 export type TaskColumn = "backlog" | "todo" | "in_progress" | "in_review" | "done";
 export type TaskPriority = "low" | "medium" | "high";
@@ -50,8 +61,6 @@ type SchoolMemberRow = {
   grade: number | null;
   status: MembershipStatus;
   joined_at: string;
-  /** A student belongs to exactly one; a School Admin runs the club and has none. */
-  interest_group_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -66,19 +75,6 @@ type InvitationRow = {
   invited_by: string;
   expires_at: string;
   accepted_at: string | null;
-  /** The group the student joins on acceptance. */
-  interest_group_id: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-/** A team inside the one STEM Club — never a club of its own. */
-type InterestGroupRow = {
-  id: string;
-  school_id: string;
-  name: string;
-  description: string | null;
-  sort_order: number;
   created_at: string;
   updated_at: string;
 };
@@ -101,8 +97,7 @@ type ProjectRow = {
   school_id: string;
   name: string;
   description: string;
-  /** Every project belongs to exactly one interest group. */
-  interest_group_id: string;
+  category: ProjectCategory;
   status: ProjectStatus;
   started_at: string;
   due_date: string;
@@ -140,6 +135,7 @@ type CompetitionRow = {
   id: string;
   school_id: string;
   name: string;
+  category: ProjectCategory;
   level: CompetitionLevel;
   event_date: string;
   status: CompetitionStatus;
@@ -158,16 +154,6 @@ type CompetitionParticipantRow = {
   updated_at: string;
 };
 
-/** A competition can involve several interest groups. */
-type CompetitionInterestGroupRow = {
-  id: string;
-  school_id: string;
-  competition_id: string;
-  interest_group_id: string;
-  created_at: string;
-  updated_at: string;
-};
-
 type EventRow = {
   id: string;
   school_id: string;
@@ -177,8 +163,6 @@ type EventRow = {
   start_time: string;
   location: string;
   created_by: string;
-  /** Null means the whole STEM Club is invited. */
-  interest_group_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -196,8 +180,8 @@ type ResourceRow = {
   id: string;
   school_id: string;
   title: string;
-  /** Null means the resource is shared with the whole STEM Club. */
-  interest_group_id: string | null;
+  /** Null is a general club resource, belonging to no particular subject. */
+  category: ProjectCategory | null;
   type: ResourceType;
   url: string | null;
   storage_path: string | null;
@@ -214,8 +198,6 @@ type AnnouncementRow = {
   title: string;
   body: string;
   pinned: boolean;
-  /** Null means the announcement goes to the whole STEM Club. */
-  interest_group_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -299,7 +281,6 @@ export type Database = {
     Tables: {
       schools: TableOf<SchoolRow>;
       users: TableOf<UserRow>;
-      interest_groups: TableOf<InterestGroupRow>;
       school_members: TableOf<SchoolMemberRow>;
       invitations: TableOf<InvitationRow>;
       projects: TableOf<ProjectRow>;
@@ -307,7 +288,6 @@ export type Database = {
       project_tasks: TableOf<ProjectTaskRow>;
       competitions: TableOf<CompetitionRow>;
       competition_participants: TableOf<CompetitionParticipantRow>;
-      competition_interest_groups: TableOf<CompetitionInterestGroupRow>;
       activity_logs: TableOf<ActivityLogRow>;
       events: TableOf<EventRow>;
       event_rsvps: TableOf<EventRsvpRow>;
@@ -338,6 +318,7 @@ export type Database = {
       user_role: UserRoleEnum;
       membership_status: MembershipStatus;
       invitation_status: InvitationStatus;
+      project_category: ProjectCategory;
       project_status: ProjectStatus;
       task_column: TaskColumn;
       task_priority: TaskPriority;
@@ -354,7 +335,6 @@ export type Database = {
 // Domain aliases used across the app.
 export type School = SchoolRow;
 export type AppUser = UserRow;
-export type InterestGroup = InterestGroupRow;
 export type ActivityLog = ActivityLogRow;
 export type SchoolMember = SchoolMemberRow;
 export type Invitation = InvitationRow;
