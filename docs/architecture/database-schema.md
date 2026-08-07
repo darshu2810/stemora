@@ -7,8 +7,25 @@ protected by Row Level Security.
 *is* the club boundary. There is no `clubs` table and no `club_id` — adding
 either would reintroduce a concept the product does not have.
 
-Subject areas are `project_category` values on a project, never groups students
-join. A project's leader is a column on the project, never a role on an account.
+Inside that one club are **interest groups** — Robotics, Programming & AI,
+Electronics, Engineering & Design, Mathematics & Research. They are teams, not
+clubs: they have no members table of their own, no admin of their own, and no
+pages of their own. They exist to organise, filter, and assign.
+
+- A **student** belongs to exactly one (`school_members.interest_group_id`).
+  A **School Admin** runs the whole club and belongs to none. Both halves are
+  enforced by the `require_student_interest_group` trigger.
+- A **project** belongs to exactly one (`projects.interest_group_id`, NOT NULL).
+- **Events, announcements, and resources** carry a nullable
+  `interest_group_id`: null means the whole STEM Club.
+- A **competition** can involve several, via `competition_interest_groups`.
+
+Every one of those foreign keys is composite — `(interest_group_id, school_id)`
+against `interest_groups (id, school_id)` — so a row can only ever point at a
+group inside its own school. Cross-school assignment is impossible in the
+schema, not merely discouraged in application code.
+
+A project's leader is a column on the project, never a role on an account.
 
 ## Conventions
 
@@ -28,10 +45,10 @@ create type membership_status as enum ('invited', 'active', 'suspended', 'remove
 
 create type invitation_status as enum ('pending', 'accepted', 'expired', 'revoked');
 
-create type project_category as enum (
-  'robotics', 'programming', 'artificial_intelligence', 'engineering',
-  'electronics', 'mathematics', 'research', 'physics', 'environmental_science'
-);
+-- There is no `project_category` enum. Subject areas are interest groups, which
+-- are rows a School Admin can rename, reorder, add, and remove — not values
+-- frozen into the type system. Two taxonomies over the same subject areas would
+-- drift apart, so there is only one.
 
 create type project_status as enum ('active', 'completed');
 
@@ -87,6 +104,59 @@ create table platform_audit_logs (
   created_at timestamptz not null default now()
 );
 create index platform_audit_logs_created_idx on platform_audit_logs (created_at desc);
+```
+
+## Interest groups
+
+### `interest_groups`
+```sql
+create table interest_groups (
+  id uuid primary key default gen_random_uuid(),
+  school_id uuid not null references schools(id) on delete cascade,
+  name text not null,
+  description text,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint interest_groups_name_not_blank check (length(trim(name)) > 0),
+  unique (school_id, name),
+  unique (id, school_id)   -- lets children prove same-school membership
+);
+
+create index interest_groups_school_idx on interest_groups (school_id, sort_order, name);
+```
+
+`register_school` seeds the five GMIS groups so a new school is usable
+immediately. That is reference data, like the badge list — the School Admin can
+rename, reorder, add, or delete them.
+
+Referential actions differ by what the row means without a group:
+
+| Table | On group delete | Why |
+|---|---|---|
+| `school_members` | `restrict` | a student cannot be left without a team |
+| `projects` | `restrict` | a project must belong to a group |
+| `events`, `announcements`, `resources` | `set null (interest_group_id)` | it simply becomes club-wide |
+| `competition_interest_groups` | `cascade` | the link row has no meaning alone |
+
+The `set null (interest_group_id)` form is Postgres 15+. It matters here: a
+plain `set null` on a composite key would also try to clear the `not null`
+`school_id` and fail at delete time.
+
+### `competition_interest_groups`
+```sql
+create table competition_interest_groups (
+  id uuid primary key default gen_random_uuid(),
+  school_id uuid not null references schools(id) on delete cascade,
+  competition_id uuid not null references competitions(id) on delete cascade,
+  interest_group_id uuid not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (competition_id, interest_group_id),
+  constraint competition_interest_groups_group_fkey
+    foreign key (interest_group_id, school_id)
+    references interest_groups (id, school_id) on delete cascade
+);
 ```
 
 ## Identity
@@ -367,18 +437,28 @@ create table notifications (
 );
 create index notifications_user_idx on notifications (school_id, user_id, read_at, created_at desc);
 
-create table audit_logs (
+create table activity_logs (
   id uuid primary key default gen_random_uuid(),
   school_id uuid not null references schools(id) on delete cascade,
-  actor_id uuid references users(id),
+  actor_id uuid references users(id) on delete set null,
   action text not null,                     -- e.g. 'project.created', 'student.removed'
   entity_type text not null,
   entity_id uuid,
+  summary text not null,                    -- one human-readable line
   metadata jsonb not null default '{}',
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
-create index audit_logs_school_idx on audit_logs (school_id, created_at desc);
+create index activity_logs_school_idx on activity_logs (school_id, created_at desc);
+create index activity_logs_entity_idx on activity_logs (school_id, entity_type, entity_id);
+create index activity_logs_actor_idx on activity_logs (actor_id, created_at desc);
 ```
+
+`activity_logs` is append-only by construction: it has a SELECT policy (School
+Admin) and an INSERT policy (any member, own school, own name), and **no UPDATE
+or DELETE policy at all**. Nobody can rewrite history through the API, which is
+the only thing that makes an audit log worth keeping. `actor_id` is
+`on delete set null` so the line survives the account that caused it.
 
 ## Row Level Security strategy
 
