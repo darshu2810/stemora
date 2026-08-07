@@ -37,7 +37,38 @@ dashboard each role lands on.
 | `student` | — (cannot invite) |
 
 A school's first `school_admin` is created when the school is registered; see
-[authentication.md](authentication.md).
+[authentication.md](authentication.md). A School Admin can give another active
+member School Admin access, and withdraw it.
+
+## Who can sign in
+
+Membership is not a yes/no. `school_members.status` decides whether an account
+opens anything, and the School Admin owns it from `/school/students`.
+
+| `status` | Can sign in | What they see | Reached by |
+|---|---|---|---|
+| `invited` | no | the invitation is still waiting | invitation sent, not yet accepted |
+| `active` | yes | their dashboard | accepting the invitation, or being restored |
+| `suspended` | no | access is paused | School Admin pauses it |
+| `removed` | no | access is closed | School Admin closes it |
+
+Two properties hold this together:
+
+1. **Sending an invitation grants nothing.** The membership row is created at
+   `invited`; the `on_auth_user_confirmed` trigger promotes it to `active` only
+   when the person actually confirms their email. So a roster count is a count
+   of people who can really sign in.
+2. **Revocation is enforced in Postgres, not in the UI.** `is_school_member()`
+   and `has_school_role()` both require `status = 'active'`, so a paused or
+   closed account reads zero rows from every table on its very next request,
+   whatever session cookie it still holds. There is no window to close.
+
+A school can never be left without a way in: the `protect_last_school_admin`
+trigger refuses to demote, pause, remove, or delete the last active
+`school_admin`. It stands down for cascades, so deleting a school still works.
+
+Someone signed in with a non-`active` membership lands on `/no-access`, which
+names the situation and offers to log out.
 
 ## Permission matrix
 
@@ -48,7 +79,7 @@ inherit. Every row is scoped to a single school's STEM Club.
 | Resource | Manage | Contribute | View |
 |---|---|---|---|
 | School + STEM Club settings | school_admin | — | school_admin |
-| Students (invite/remove) | school_admin | — | school_admin, student |
+| Access (invite, pause, restore, close, grant School Admin) | school_admin | — | school_admin |
 | Projects (create/archive, set category, leader, team) | school_admin | — | all students |
 | Project tasks (add/delete) | school_admin | move own task across the board | all students |
 | Competitions (create, set roster, record result) | school_admin | — | all students |

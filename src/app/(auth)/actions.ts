@@ -6,6 +6,33 @@ import { createClient } from "@/lib/supabase/server";
 
 export type AuthResult = { error: string } | undefined;
 
+/**
+ * Where a freshly authenticated user belongs. Access that a School Admin has
+ * paused or closed sends them to `/no-access`, which explains why, rather than
+ * to a school-registration form they never asked for.
+ */
+async function destinationFor(userId: string): Promise<string> {
+  const supabase = await createClient();
+
+  const { data: profile } = await supabase
+    .from("users")
+    .select("platform_role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (profile?.platform_role === "platform_owner") return "/platform/dashboard";
+
+  const { data: membership } = await supabase
+    .from("school_members")
+    .select("role, status")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!membership) return "/schools/new";
+  if (membership.status !== "active") return "/no-access";
+  return membership.role === "school_admin" ? "/school/dashboard" : "/student/dashboard";
+}
+
 export async function signIn(_prev: AuthResult, formData: FormData): Promise<AuthResult> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
@@ -24,29 +51,11 @@ export async function signIn(_prev: AuthResult, formData: FormData): Promise<Aut
   } = await supabase.auth.getUser();
 
   let destination = next || "/school/dashboard";
-  if (user && !next) {
-    const { data: profile } = await supabase
-      .from("users")
-      .select("platform_role")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (profile?.platform_role === "platform_owner") {
-      destination = "/platform/dashboard";
-    } else {
-      const { data: membership } = await supabase
-        .from("school_members")
-        .select("role")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .maybeSingle();
-
-      destination = !membership
-        ? "/schools/new"
-        : membership.role === "school_admin"
-          ? "/school/dashboard"
-          : "/student/dashboard";
-    }
+  if (user) {
+    const home = await destinationFor(user.id);
+    // A `next` from the login redirect is only honoured for someone who has a
+    // workspace to go back to.
+    destination = home === "/no-access" || home === "/schools/new" ? home : next || home;
   }
 
   revalidatePath("/", "layout");
@@ -136,21 +145,7 @@ export async function updatePassword(_prev: AuthResult, formData: FormData): Pro
     data: { user },
   } = await supabase.auth.getUser();
 
-  let destination = "/login";
-  if (user) {
-    const { data: membership } = await supabase
-      .from("school_members")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .maybeSingle();
-
-    destination = !membership
-      ? "/schools/new"
-      : membership.role === "school_admin"
-        ? "/school/dashboard"
-        : "/student/dashboard";
-  }
+  const destination = user ? await destinationFor(user.id) : "/login";
 
   revalidatePath("/", "layout");
   redirect(destination);

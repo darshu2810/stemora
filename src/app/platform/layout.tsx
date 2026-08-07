@@ -1,6 +1,6 @@
 import { DashboardShell } from "@/components/dashboard/shell";
 import { requireSession } from "@/lib/auth/session";
-import { initialsOf } from "@/lib/db/queries";
+import { initialsOf } from "@/lib/utils";
 
 export default async function PlatformLayout({ children }: { children: React.ReactNode }) {
   const session = await requireSession("platform_owner");

@@ -1,10 +1,12 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { initialsOf } from "@/lib/utils";
 import type {
   Announcement,
   Badge,
   Competition,
+  MembershipStatus,
   Project,
   ProjectTask,
   Resource,
@@ -13,6 +15,7 @@ import type {
   StudentCertificate,
   StudentProfile,
   StudentSkill,
+  UserRoleEnum,
 } from "@/lib/supabase/types";
 
 /** A student as the app displays them: the person plus their membership. */
@@ -32,15 +35,6 @@ export type ProjectWithTeam = Project & {
 
 export type TaskWithProject = ProjectTask & { projectName: string; assigneeName: string | null };
 
-export function initialsOf(name: string) {
-  return name
-    .split(" ")
-    .map((p) => p[0])
-    .filter(Boolean)
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
 
 export const BOARD_COLUMNS = [
   { id: "backlog", name: "Backlog" },
@@ -52,6 +46,11 @@ export const BOARD_COLUMNS = [
 
 // --- Students ---------------------------------------------------------------
 
+/**
+ * Students who can actually sign in. Anyone still holding an unaccepted
+ * invitation is excluded, so a project team can never be built from people who
+ * have never logged in.
+ */
 export async function listStudents(schoolId: string): Promise<StudentRow[]> {
   const supabase = await createClient();
   const { data } = await supabase
@@ -59,6 +58,7 @@ export async function listStudents(schoolId: string): Promise<StudentRow[]> {
     .select("grade, status, joined_at, users(id, full_name, email)")
     .eq("school_id", schoolId)
     .eq("role", "student")
+    .eq("status", "active")
     .order("joined_at", { ascending: true });
 
   return (data ?? []).map((row) => {
@@ -74,15 +74,63 @@ export async function listStudents(schoolId: string): Promise<StudentRow[]> {
   });
 }
 
-export async function listPendingInvitations(schoolId: string) {
+// --- Access -----------------------------------------------------------------
+
+/** One person's standing with the school, as the School Admin manages it. */
+export type AccessRow = {
+  userId: string;
+  name: string;
+  email: string;
+  role: UserRoleEnum;
+  grade: number | null;
+  status: MembershipStatus;
+  joinedAt: string;
+  /** Set only while the invitation is outstanding. */
+  invitationId: string | null;
+  expiresAt: string | null;
+};
+
+/**
+ * Everyone with any standing at the school — active, invited, suspended, or
+ * removed — in one list. This is the roster the School Admin governs, so it
+ * deliberately hides nothing: a person who cannot sign in still appears, with
+ * the reason why.
+ */
+export async function listAccess(schoolId: string): Promise<AccessRow[]> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("invitations")
-    .select("id, email, full_name, grade, created_at, expires_at")
-    .eq("school_id", schoolId)
-    .eq("status", "pending")
-    .order("created_at", { ascending: false });
-  return data ?? [];
+
+  const [{ data: members }, { data: invitations }] = await Promise.all([
+    supabase
+      .from("school_members")
+      .select("user_id, role, grade, status, joined_at, users(id, full_name, email)")
+      .eq("school_id", schoolId)
+      .order("joined_at", { ascending: true }),
+    supabase
+      .from("invitations")
+      .select("id, email, expires_at")
+      .eq("school_id", schoolId)
+      .eq("status", "pending"),
+  ]);
+
+  const pendingByEmail = new Map(
+    (invitations ?? []).map((i) => [i.email.toLowerCase(), i] as const),
+  );
+
+  return (members ?? []).map((row) => {
+    const u = row.users as unknown as { id: string; full_name: string; email: string };
+    const invitation = row.status === "invited" ? pendingByEmail.get(u.email.toLowerCase()) : undefined;
+    return {
+      userId: u.id,
+      name: u.full_name,
+      email: u.email,
+      role: row.role,
+      grade: row.grade,
+      status: row.status,
+      joinedAt: row.joined_at,
+      invitationId: invitation?.id ?? null,
+      expiresAt: invitation?.expires_at ?? null,
+    };
+  });
 }
 
 // --- Projects ---------------------------------------------------------------

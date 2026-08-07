@@ -81,6 +81,28 @@ export async function getSession(): Promise<Session | null> {
 }
 
 /**
+ * Why a signed-in user has no workspace: they belong to no school, or their
+ * School Admin has closed their access.
+ */
+export type BlockedReason = "invited" | "suspended" | "removed";
+
+/**
+ * The standing of a signed-in user who has no *active* membership. Null means
+ * they genuinely belong to no school and should register one.
+ */
+export async function getBlockedReason(userId: string): Promise<BlockedReason | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("school_members")
+    .select("status, schools(name)")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!data || data.status === "active") return null;
+  return data.status as BlockedReason;
+}
+
+/**
  * The session, or a redirect. `role` narrows it further: a Student hitting a
  * School Admin page is sent to their own dashboard rather than shown a page
  * they have no business seeing.
@@ -91,8 +113,12 @@ export async function requireSession(role?: UserRole): Promise<Session> {
   if (!session) {
     const supabase = await createClient();
     const { data: auth } = await supabase.auth.getUser();
-    // Signed in, but not attached to a school yet — finish registration.
-    if (auth.user) redirect("/schools/new");
+    if (auth.user) {
+      // Signed in, but the school is closed to them — say so, rather than
+      // offering to register a school they never asked for.
+      const blocked = await getBlockedReason(auth.user.id);
+      redirect(blocked ? "/no-access" : "/schools/new");
+    }
     redirect("/login");
   }
 

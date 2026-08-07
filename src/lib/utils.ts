@@ -21,3 +21,14 @@ export function formatDate(iso: string): string {
   const [, year, month, day] = match;
   return `${Number(day)} ${MONTHS[Number(month) - 1]} ${year}`;
 }
+
+/** The two-letter fallback shown in an avatar when there is no picture. */
+export function initialsOf(name: string) {
+  return name
+    .split(" ")
+    .map((p) => p[0])
+    .filter(Boolean)
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}

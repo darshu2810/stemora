@@ -7,6 +7,7 @@ import { requireSchoolAdmin, requireSession } from "@/lib/auth/session";
 import type {
   CompetitionLevel,
   EventType,
+  MembershipStatus,
   ProjectCategory,
   ResourceType,
   TaskColumn,
@@ -22,13 +23,40 @@ function str(fd: FormData, key: string) {
   return String(fd.get(key) ?? "").trim();
 }
 
-// --- Students ---------------------------------------------------------------
+// --- Access -----------------------------------------------------------------
+//
+// Who can sign in to this school is the School Admin's decision, made here.
+// The database backs every one of these up: `is_school_member` and
+// `has_school_role` both require an *active* membership, so a suspended or
+// removed person loses their data access on their very next request, whatever
+// session cookie they are still holding.
+
+/** Sends the Supabase invitation email. Returns null on success. */
+async function sendInviteEmail(
+  email: string,
+  fullName: string,
+  schoolId: string,
+  grade: number | null,
+): Promise<string | null> {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  try {
+    const admin = createAdminClient();
+    const { error } = await admin.auth.admin.inviteUserByEmail(email, {
+      redirectTo: `${siteUrl}/reset-password`,
+      data: { full_name: fullName, school_id: schoolId, grade },
+    });
+    if (error) throw error;
+    return null;
+  } catch (e) {
+    return e instanceof Error ? e.message : "Unknown error";
+  }
+}
 
 /**
  * Invites a student by email. Two things happen: an `invitations` row so the
  * admin can see who is outstanding, and a Supabase Auth invitation email that
- * carries the school and grade, so accepting it creates the membership without
- * the student typing anything but a password.
+ * carries the school and grade. Accepting the email is what grants access —
+ * until then the membership sits at `invited` and opens nothing.
  */
 export async function inviteStudent(_prev: ActionResult | undefined, fd: FormData): Promise<ActionResult> {
   const session = await requireSchoolAdmin();
@@ -41,6 +69,25 @@ export async function inviteStudent(_prev: ActionResult | undefined, fd: FormDat
   if (!fullName) return fail("Enter the student's full name.");
 
   const supabase = await createClient();
+
+  // Someone who already has a standing here is restored from the list, not
+  // invited again — re-inviting would fail anyway, since the account exists.
+  const { data: existing } = await supabase
+    .from("school_members")
+    .select("status, users!inner(email)")
+    .eq("school_id", session.schoolId)
+    .eq("users.email", email)
+    .maybeSingle();
+
+  if (existing) {
+    return fail(
+      existing.status === "active"
+        ? "That person is already a member."
+        : existing.status === "invited"
+          ? "That student already has an invitation waiting. Resend it from the list."
+          : `That person is already on the list as ${existing.status}. Restore their access from there.`,
+    );
+  }
 
   const { error: rowError } = await supabase.from("invitations").insert({
     school_id: session.schoolId,
@@ -58,16 +105,9 @@ export async function inviteStudent(_prev: ActionResult | undefined, fd: FormDat
     );
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const emailError = await sendInviteEmail(email, fullName, session.schoolId, grade);
 
-  try {
-    const admin = createAdminClient();
-    const { error } = await admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${siteUrl}/reset-password`,
-      data: { full_name: fullName, school_id: session.schoolId, grade },
-    });
-    if (error) throw error;
-  } catch (e) {
+  if (emailError) {
     // The invitation is recorded either way; say plainly that the email didn't go.
     await supabase
       .from("invitations")
@@ -75,41 +115,182 @@ export async function inviteStudent(_prev: ActionResult | undefined, fd: FormDat
       .eq("school_id", session.schoolId)
       .eq("email", email)
       .eq("status", "pending");
-    const message = e instanceof Error ? e.message : "Unknown error";
-    return fail(`Couldn't send the invitation email: ${message}`);
+    return fail(`Couldn't send the invitation email: ${emailError}`);
   }
 
   revalidatePath("/school/students");
   return ok;
 }
 
-export async function revokeInvitation(_prev: ActionResult | undefined, fd: FormData): Promise<ActionResult> {
+/**
+ * Sends the invitation again. The account is discarded and recreated, which is
+ * safe precisely because an unaccepted invitation has never been signed in to
+ * and owns no data — and it makes the previous email's link stop working.
+ */
+export async function resendInvitation(_prev: ActionResult | undefined, fd: FormData): Promise<ActionResult> {
   const session = await requireSchoolAdmin();
+  const userId = str(fd, "userId");
   const supabase = await createClient();
 
-  const { error } = await supabase
-    .from("invitations")
-    .update({ status: "revoked" })
-    .eq("id", str(fd, "invitationId"))
-    .eq("school_id", session.schoolId);
+  const { data: member } = await supabase
+    .from("school_members")
+    .select("status, grade, users(email, full_name)")
+    .eq("school_id", session.schoolId)
+    .eq("user_id", userId)
+    .maybeSingle();
 
-  if (error) return fail(error.message);
+  if (!member) return fail("That person is no longer on the list.");
+  if (member.status !== "invited") return fail("That invitation has already been accepted.");
+
+  const user = member.users as unknown as { email: string; full_name: string };
+  const email = user.email.toLowerCase();
+
+  try {
+    const admin = createAdminClient();
+    const { error } = await admin.auth.admin.deleteUser(userId);
+    if (error) throw error;
+  } catch (e) {
+    return fail(`Couldn't reissue the invitation: ${e instanceof Error ? e.message : "Unknown error"}`);
+  }
+
+  // Deleting the account cascaded the old membership and left the invitation
+  // row behind; replace it so the expiry restarts from today.
+  await supabase.from("invitations").delete().eq("school_id", session.schoolId).eq("email", email);
+  await supabase.from("invitations").insert({
+    school_id: session.schoolId,
+    email,
+    full_name: user.full_name,
+    grade: member.grade,
+    invited_by: session.userId,
+  });
+
+  const emailError = await sendInviteEmail(email, user.full_name, session.schoolId, member.grade);
+  if (emailError) return fail(`Couldn't send the invitation email: ${emailError}`);
+
   revalidatePath("/school/students");
   return ok;
 }
 
-export async function removeStudent(_prev: ActionResult | undefined, fd: FormData): Promise<ActionResult> {
+/**
+ * Withdraws an invitation that has not been accepted. The account is deleted,
+ * so the link already sitting in that inbox stops working.
+ */
+export async function revokeInvitation(_prev: ActionResult | undefined, fd: FormData): Promise<ActionResult> {
   const session = await requireSchoolAdmin();
+  const userId = str(fd, "userId");
   const supabase = await createClient();
+
+  const { data: member } = await supabase
+    .from("school_members")
+    .select("status, users(email)")
+    .eq("school_id", session.schoolId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!member) return fail("That invitation is no longer on the list.");
+  if (member.status !== "invited") return fail("That invitation has already been accepted.");
+
+  const email = (member.users as unknown as { email: string }).email.toLowerCase();
+
+  await supabase
+    .from("invitations")
+    .update({ status: "revoked" })
+    .eq("school_id", session.schoolId)
+    .eq("email", email)
+    .eq("status", "pending");
+
+  try {
+    const admin = createAdminClient();
+    const { error } = await admin.auth.admin.deleteUser(userId);
+    if (error) throw error;
+  } catch (e) {
+    // Fall back to removing the membership by hand: without it the emailed
+    // link can still create a session, but it opens nothing.
+    await supabase
+      .from("school_members")
+      .delete()
+      .eq("school_id", session.schoolId)
+      .eq("user_id", userId)
+      .eq("status", "invited");
+    return fail(
+      `The invitation is withdrawn and grants nothing, but the account couldn't be deleted: ${
+        e instanceof Error ? e.message : "Unknown error"
+      }`,
+    );
+  }
+
+  revalidatePath("/school/students");
+  return ok;
+}
+
+/**
+ * Suspends, restores, or removes someone's access. Suspending keeps the person
+ * and their work on the roster but closes the door immediately; restoring
+ * reopens it. Nothing here deletes a student's contributions.
+ */
+export async function setMemberStatus(_prev: ActionResult | undefined, fd: FormData): Promise<ActionResult> {
+  const session = await requireSchoolAdmin();
+  const userId = str(fd, "userId");
+  const status = str(fd, "status") as MembershipStatus;
+
+  if (!["active", "suspended", "removed"].includes(status)) {
+    return fail("That is not an access level.");
+  }
+  if (userId === session.userId) {
+    return fail("You can't change your own access.");
+  }
+
+  const supabase = await createClient();
+  const { error, count } = await supabase
+    .from("school_members")
+    .update({ status }, { count: "exact" })
+    .eq("school_id", session.schoolId)
+    .eq("user_id", userId);
+
+  if (error) return fail(error.message);
+  if (!count) return fail("That person is no longer on the list.");
+
+  revalidatePath("/school/students");
+  return ok;
+}
+
+/**
+ * Grants or withdraws School Admin. A school can never end up with none: the
+ * database refuses to demote the last one, so this cannot lock anybody out.
+ */
+export async function setMemberRole(_prev: ActionResult | undefined, fd: FormData): Promise<ActionResult> {
+  const session = await requireSchoolAdmin();
+  const userId = str(fd, "userId");
+  const role = str(fd, "role");
+
+  if (role !== "school_admin" && role !== "student") {
+    return fail("That is not a role.");
+  }
+  if (userId === session.userId) {
+    return fail("You can't change your own role. Another School Admin can do it for you.");
+  }
+
+  const supabase = await createClient();
+  const { data: member } = await supabase
+    .from("school_members")
+    .select("status")
+    .eq("school_id", session.schoolId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!member) return fail("That person is no longer on the list.");
+  if (member.status !== "active") {
+    return fail("Only someone with active access can be given a role.");
+  }
 
   const { error } = await supabase
     .from("school_members")
-    .delete()
+    .update({ role })
     .eq("school_id", session.schoolId)
-    .eq("user_id", str(fd, "userId"))
-    .eq("role", "student");
+    .eq("user_id", userId);
 
   if (error) return fail(error.message);
+
   revalidatePath("/school/students");
   return ok;
 }

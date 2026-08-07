@@ -1,6 +1,6 @@
 import { DashboardShell } from "@/components/dashboard/shell";
 import { requireSchoolAdmin } from "@/lib/auth/session";
-import { initialsOf } from "@/lib/db/queries";
+import { initialsOf } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function SchoolLayout({ children }: { children: React.ReactNode }) {
