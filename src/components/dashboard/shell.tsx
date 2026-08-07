@@ -5,7 +5,7 @@ import { Menu } from "lucide-react";
 import { Logo } from "@/components/shared/logo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { NotificationBell } from "@/components/shared/notification-bell";
-import { PersonaSwitcher } from "@/components/dashboard/persona-switcher";
+import { UserMenu } from "@/components/dashboard/user-menu";
 import { SidebarNav } from "@/components/dashboard/sidebar-nav";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -21,7 +21,6 @@ const NAV_BY_VARIANT = {
   student: studentNav,
 } as const;
 
-// The surface you are on decides who you are signed in as.
 const ROLE_BY_VARIANT: Record<keyof typeof NAV_BY_VARIANT, UserRole> = {
   platform: "platform_owner",
   school: "school_admin",
@@ -31,10 +30,14 @@ const ROLE_BY_VARIANT: Record<keyof typeof NAV_BY_VARIANT, UserRole> = {
 export function DashboardShell({
   variant,
   contextLabel,
+  user,
+  unreadCount,
   children,
 }: {
   variant: keyof typeof NAV_BY_VARIANT;
   contextLabel: string;
+  user: { name: string; email: string; initials: string };
+  unreadCount: number;
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = React.useState(false);
@@ -86,8 +89,8 @@ export function DashboardShell({
 
           <div className="flex items-center gap-1">
             <ThemeToggle />
-            <NotificationBell />
-            <PersonaSwitcher role={role} />
+            <NotificationBell unreadCount={unreadCount} />
+            <UserMenu name={user.name} email={user.email} role={role} initials={user.initials} />
           </div>
         </header>
 

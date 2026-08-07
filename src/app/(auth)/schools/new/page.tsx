@@ -1,115 +1,89 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useActionState } from "react";
+import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { setStoredRole } from "@/lib/mock-session";
-import { dashboardForRole } from "@/config/roles";
-
-const schoolSchema = z.object({
-  schoolName: z.string().min(2, "Enter your school's name"),
-  adminName: z.string().min(2, "Enter your full name"),
-  email: z.email("Enter a valid email"),
-  password: z.string().min(8, "At least 8 characters"),
-});
-
-type SchoolValues = z.infer<typeof schoolSchema>;
+import { Label } from "@/components/ui/label";
+import { registerSchool, type AuthResult } from "@/app/(auth)/actions";
 
 export default function NewSchoolPage() {
-  const router = useRouter();
-  const form = useForm<SchoolValues>({
-    resolver: zodResolver(schoolSchema),
-    defaultValues: { schoolName: "", adminName: "", email: "", password: "" },
-  });
-
-  function onSubmit() {
-    // Creates schools + users + school_members(role=school_admin) once the
-    // backend lands — see docs/architecture/authentication.md#signup-is-never-open.
-    setStoredRole("school_admin");
-    router.push(dashboardForRole("school_admin"));
-  }
+  const [state, formAction, pending] = useActionState<AuthResult, FormData>(
+    registerSchool,
+    undefined,
+  );
 
   return (
     <div className="w-full max-w-sm">
-      <h1 className="font-display text-2xl font-semibold tracking-tight">Start your school</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-tight">Register your school</h1>
       <p className="mt-1.5 text-sm text-muted-foreground">
-        Create your school&apos;s secure workspace. You&apos;ll be the school admin.
+        Creates your school&apos;s workspace and its STEM Club. You&apos;ll be the School Admin.
       </p>
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-5">
-          <FormField
-            control={form.control}
-            name="schoolName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>School name</FormLabel>
-                <FormControl>
-                  <Input placeholder="GMIS Jakarta" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="adminName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Your full name</FormLabel>
-                <FormControl>
-                  <Input placeholder="Ms. Priya Menon" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
+      <form action={formAction} className="mt-8 space-y-5">
+        <div className="space-y-2">
+          <Label htmlFor="schoolName">School name</Label>
+          <Input id="schoolName" name="schoolName" required placeholder="GMIS Jakarta" />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="clubName">STEM Club name</Label>
+          <Input id="clubName" name="clubName" required placeholder="GMIS STEM Club" />
+          <p className="text-xs text-muted-foreground">
+            Each school runs exactly one STEM Club. This is what your students will see.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="district">District (optional)</Label>
+          <Input id="district" name="district" placeholder="Jakarta Timur" />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="adminName">Your full name</Label>
+          <Input id="adminName" name="adminName" required placeholder="Ms. Priya Menon" />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="email">Your school email</Label>
+          <Input
+            id="email"
             name="email"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Work email</FormLabel>
-                <FormControl>
-                  <Input type="email" placeholder="priya.menon@gmis.sch.id" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+            type="email"
+            autoComplete="email"
+            required
+            placeholder="you@gmis.sch.id"
           />
-          <FormField
-            control={form.control}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
             name="password"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Password</FormLabel>
-                <FormControl>
-                  <Input type="password" autoComplete="new-password" placeholder="••••••••" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={8}
+            placeholder="At least 8 characters"
           />
-          <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-            Create workspace
-          </Button>
-        </form>
-      </Form>
+        </div>
+
+        {state?.error ? (
+          <p className="flex items-start gap-2 text-sm text-destructive">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" />
+            {state.error}
+          </p>
+        ) : null}
+
+        <Button type="submit" className="w-full" disabled={pending}>
+          {pending ? "Creating your workspace…" : "Create workspace"}
+        </Button>
+      </form>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
-        Already have a workspace?{" "}
+        Already have an account?{" "}
         <Link href="/login" className="font-medium text-primary hover:underline">
           Log in
         </Link>
