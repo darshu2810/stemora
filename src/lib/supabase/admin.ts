@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
+import { SUPABASE_URL } from "@/lib/env";
 
 /**
  * Service-role client. Bypasses RLS, so it is used for exactly one thing:
@@ -18,7 +19,7 @@ export function createAdminClient() {
       "SUPABASE_SERVICE_ROLE_KEY is not set — add it to .env.local to send invitations.",
     );
   }
-  return createClient<Database>(process.env.NEXT_PUBLIC_SUPABASE_URL!, key, {
+  return createClient<Database>(SUPABASE_URL, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
