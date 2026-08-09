@@ -4,7 +4,10 @@
 // types at the call site.
 
 export type UserRoleEnum = "platform_owner" | "school_admin" | "student";
-export type MembershipStatus = "invited" | "active" | "suspended" | "removed";
+// `pending` is a student who asked to join; `invited` is one a School Admin
+// sought out. Neither can sign in to anything — the difference is who moved
+// first, and only `pending` needs a decision from the club head.
+export type MembershipStatus = "pending" | "invited" | "active" | "suspended" | "removed";
 export type InvitationStatus = "pending" | "accepted" | "expired" | "revoked";
 /** Where a school's request to join STEMORA has got to. */
 export type ApplicationStatus = "pending" | "approved" | "rejected";
@@ -326,6 +329,11 @@ export type Database = {
     Functions: {
       current_school_id: { Args: Record<never, never>; Returns: string };
       is_school_member: { Args: { target_school: string }; Returns: boolean };
+      is_school_affiliate: { Args: { target_school: string }; Returns: boolean };
+      joinable_schools: {
+        Args: Record<never, never>;
+        Returns: { id: string; name: string; club_name: string; district: string | null }[];
+      };
       is_platform_owner: { Args: Record<never, never>; Returns: boolean };
       has_school_role: {
         Args: { target_school: string; min_role: UserRoleEnum };

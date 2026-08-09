@@ -20,12 +20,18 @@ Legend: PO=platform_owner, SA=school_admin, S=student.
 
 | Route | Purpose | Roles |
 |---|---|---|
-| `/login` | Sign in. Carries the demo persona picker until Supabase Auth lands. | all |
+| `/login` | Sign in — Student and School Admin sections, both email + password | all |
+| `/register` | Join STEMORA — Student (asks to join a school) and School Admin (applies to bring one) | — |
+| `/schools/new` | Redirects to `/register?as=school`; kept for old links | — |
 | `/forgot-password` | Password recovery | all |
-| `/schools/new` | School registration — creates the `schools` row, its one STEM Club, and the first `school_admin` | — |
+| `/reset-password` | Set a password, from a reset or invitation link | all |
+| `/pending` | Terminal — student waiting for the club head to accept them | student |
+| `/waitlist` | Terminal — school application under review by the founders | — |
+| `/application-rejected` | Terminal — school application refused, with the reason | — |
+| `/no-access` | Terminal — invited but not accepted, paused, or closed | — |
 
-Planned, not yet built: `/invite/[token]` (accept a student invitation) and
-`/reset-password`.
+There is no `/invite/[token]`: student invitations use Supabase's own emailed
+link, which lands on `/auth/confirm` and continues to `/reset-password`.
 
 ## `/platform` — `platform_owner` only
 

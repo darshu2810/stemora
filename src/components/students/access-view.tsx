@@ -12,6 +12,7 @@ import {
   Send,
   Trash2,
   TriangleAlert,
+  UserRoundPlus,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
@@ -52,6 +53,7 @@ import {
 import { formatDate, initialsOf } from "@/lib/utils";
 import type { AccessRow } from "@/lib/db/queries";
 import {
+  decideJoinRequest,
   inviteStudent,
   resendInvitation,
   revokeInvitation,
@@ -66,6 +68,7 @@ const GRADE_ITEMS = Object.fromEntries(GRADES.map((g) => [String(g), `Grade ${g}
 
 const FILTER_ITEMS: Record<string, string> = {
   all: "Everyone",
+  pending: "Asked to join",
   active: "Has access",
   invited: "Invitation pending",
   suspended: "Paused",
@@ -73,6 +76,7 @@ const FILTER_ITEMS: Record<string, string> = {
 };
 
 const STATUS_BADGE: Record<MembershipStatus, { kind: StatusKind; label: string }> = {
+  pending: { kind: "pending", label: "asked to join" },
   active: { kind: "active", label: "has access" },
   invited: { kind: "pending", label: "invited" },
   suspended: { kind: "suspended", label: "paused" },
@@ -165,6 +169,7 @@ export function AccessView({
   const selected = people.find((p) => p.userId === selectedId) ?? null;
 
   const counts = {
+    pending: people.filter((p) => p.status === "pending").length,
     active: people.filter((p) => p.status === "active").length,
     invited: people.filter((p) => p.status === "invited").length,
     suspended: people.filter((p) => p.status === "suspended").length,
@@ -226,7 +231,7 @@ export function AccessView({
       <PageHeader
         eyebrow={clubName}
         title="Students"
-        description="Everyone who can sign in to this school, and what each of them can do. Invite, pause, or close access here."
+        description="Everyone who can sign in to this school, and what each of them can do. Accept the students asking to join, invite the ones who haven't, and pause or close access here."
         actions={
           <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
             <DialogTrigger render={<Button><Plus className="size-4" /> Invite Student</Button>} />
@@ -281,7 +286,28 @@ export function AccessView({
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      {counts.pending > 0 ? (
+        <button
+          type="button"
+          onClick={() => setFilter("pending")}
+          className="flex w-full items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4 text-left transition-colors hover:bg-primary/10"
+        >
+          <UserRoundPlus className="mt-0.5 size-4 shrink-0 text-primary" />
+          <div className="text-sm">
+            <p className="font-medium">
+              {counts.pending === 1
+                ? "1 student is asking to join"
+                : `${counts.pending} students are asking to join`}
+            </p>
+            <p className="mt-0.5 text-muted-foreground">
+              They can&apos;t sign in until you accept them. Open a name to accept or decline.
+            </p>
+          </div>
+        </button>
+      ) : null}
+
+      <div className="grid gap-4 sm:grid-cols-4">
+        <StatCard label="Asked to join" value={String(counts.pending)} icon={UserRoundPlus} />
         <StatCard label="Has access" value={String(counts.active)} icon={UserCheck} />
         <StatCard label="Invitation pending" value={String(counts.invited)} icon={MailWarning} />
         <StatCard label="Paused" value={String(counts.suspended)} icon={Lock} />
@@ -393,6 +419,38 @@ function AccessPanel({
 
 function AccessControls({ person, onDone }: { person: AccessRow; onDone: () => void }) {
   const { userId, name, status, role } = person;
+
+  if (status === "pending") {
+    return (
+      <>
+        <p className="pb-2 text-sm text-muted-foreground">
+          {name} asked to join the club and is waiting on you. Nothing is open to them until you
+          accept.
+        </p>
+        <ConfirmAction
+          label="Accept into the club"
+          icon={UserCheck}
+          title={`Accept ${name} into the club?`}
+          description="They'll be able to sign in straight away, as a Student."
+          confirmLabel="Accept"
+          action={decideJoinRequest}
+          fields={{ userId, decision: "accept" }}
+          onDone={onDone}
+        />
+        <ConfirmAction
+          label="Decline the request"
+          icon={Trash2}
+          title={`Decline ${name}'s request?`}
+          description="They won't be able to sign in. They stay on the list as closed, so you'll know they were turned down — you can restore them later if it was a mistake."
+          confirmLabel="Decline"
+          action={decideJoinRequest}
+          fields={{ userId, decision: "decline" }}
+          destructive
+          onDone={onDone}
+        />
+      </>
+    );
+  }
 
   if (status === "invited") {
     return (

@@ -79,29 +79,27 @@ no parked routes, and no placeholder screens.
 Design docs live in [`docs/architecture/`](docs/architecture/); start from
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
-## Demo data
+## Data
 
-The app runs on fixture data in [`src/lib/mock-data.ts`](src/lib/mock-data.ts):
-the fictional GMIS STEM Club at GMIS Jakarta, with 36 fictional students across
-Grades 8–12, 11 projects, 9 competitions, 13 resources, 8 announcements, and 10
-events. No real student or staff data appears anywhere.
-
-Counts are derived, not typed in: `clubStats` is computed from the fixtures and
-project progress is computed from each project's schedule, so no number in the
-UI can contradict the data behind it.
+There is no fixture data. Every screen reads from Supabase, and an empty
+database renders empty states rather than invented numbers. Counts are derived
+from real rows, so no figure in the UI can contradict the data behind it.
 
 ## Deployment
 
-See [`DEPLOYMENT.md`](DEPLOYMENT.md).
+See [`DEPLOYMENT.md`](DEPLOYMENT.md). The app requires four environment
+variables, one of which — `SUPABASE_SERVICE_ROLE_KEY` — is a server-only secret.
 
 ## Before a real pilot
 
-The app runs on fixture data with a client-side persona switcher standing in
-for auth. These must land before a school uses it with real student data:
+Authentication, server-side authorization, and tenant isolation are in place:
+Supabase Auth with RLS on every table, role resolved from the database on each
+request, and the approval gates described in
+[`docs/architecture/authentication.md`](docs/architecture/authentication.md).
 
-1. **Backend** — Supabase project, schema from
-   `docs/architecture/database-schema.md`, RLS policies enforcing tenant
-   isolation.
-2. **Real authentication** — replace `src/lib/mock-session.ts`; server-side
-   authorization on every route, not just nav filtering.
-3. **Legal pages** — Terms and Privacy. A pilot handling minors' data needs both.
+Still outstanding before a school enters real student data:
+
+1. **Legal pages** — Terms and Privacy. A pilot handling minors' data needs both.
+2. **Custom SMTP** — the built-in Supabase mailer is rate-limited to a handful
+   of messages an hour, which will not survive a real intake.
+3. **Leaked-password protection** — one toggle in Supabase Auth settings, off today.

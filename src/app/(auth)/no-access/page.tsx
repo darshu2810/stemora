@@ -18,6 +18,8 @@ export default async function NoAccessPage() {
   const reason = await getBlockedReason(auth.user.id);
   // Access was restored while they were away, or they never had a school.
   if (!reason) redirect("/login");
+  // Nobody has refused a waiting student anything; that has its own page.
+  if (reason === "pending") redirect("/pending");
 
   const copy = {
     invited: {
@@ -32,8 +34,8 @@ export default async function NoAccessPage() {
     },
     removed: {
       icon: Lock,
-      title: "You're no longer in the STEM Club",
-      body: "Your School Admin has closed your access. If you think that's a mistake, ask them to restore it.",
+      title: "You're not in the STEM Club",
+      body: "Either your request to join wasn't accepted, or your access was closed. Your club head can restore it — ask them if you think this is a mistake.",
     },
   }[reason];
 

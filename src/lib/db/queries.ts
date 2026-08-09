@@ -75,6 +75,33 @@ export async function listStudents(schoolId: string): Promise<StudentRow[]> {
   });
 }
 
+// --- Schools ----------------------------------------------------------------
+
+/** A school as it appears in the register page's dropdown. */
+export type JoinableSchool = {
+  id: string;
+  name: string;
+  clubName: string;
+  district: string | null;
+};
+
+/**
+ * The schools a student can ask to join. Read through a SECURITY DEFINER
+ * function because the caller has no account yet — `schools` itself is
+ * readable only by members, and must stay that way.
+ */
+export async function listJoinableSchools(): Promise<JoinableSchool[]> {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("joinable_schools");
+
+  return (data ?? []).map((s) => ({
+    id: s.id,
+    name: s.name,
+    clubName: s.club_name,
+    district: s.district,
+  }));
+}
+
 // --- Access -----------------------------------------------------------------
 
 /** One person's standing with the school, as the School Admin manages it. */

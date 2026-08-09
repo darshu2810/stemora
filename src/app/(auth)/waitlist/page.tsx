@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Clock, Mail, Phone, XCircle, MailCheck } from "lucide-react";
+import { redirect } from "next/navigation";
+import { Clock, Mail, Phone, MailCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
@@ -28,51 +29,32 @@ export default async function WaitlistPage({
   } = await supabase.auth.getUser();
 
   const application = user ? await applicationFor(user.id) : null;
-  const rejected = application?.status === "rejected";
+
+  // A decision has been made, so this is no longer the truth about where they
+  // stand. The middleware routes signed-in visitors before the page renders;
+  // this covers a direct hit and keeps the two states from ever sharing a page.
+  if (application?.status === "rejected") redirect("/application-rejected");
 
   return (
     <div className="w-full max-w-md">
-      <div
-        className={
-          rejected
-            ? "flex size-11 items-center justify-center rounded-full bg-destructive/10 text-destructive"
-            : "flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary"
-        }
-      >
-        {rejected ? <XCircle className="size-5" strokeWidth={1.75} /> : <Clock className="size-5" strokeWidth={1.75} />}
+      <div className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <Clock className="size-5" strokeWidth={1.75} />
       </div>
 
       <h1 className="mt-4 font-display text-2xl font-semibold tracking-tight">
-        {rejected ? "Your STEMORA application was not approved" : "Your STEM Club is on the waitlist"}
+        Your STEM Club is on the waitlist
       </h1>
 
-      {rejected ? (
-        <>
-          <p className="mt-2 text-sm text-muted-foreground">
-            The founders reviewed the request for{" "}
-            <span className="font-medium text-foreground">{application.schoolName}</span> and
-            weren&apos;t able to approve it.
-          </p>
-          {application.rejectionReason ? (
-            <p className="mt-3 rounded-lg border border-border bg-secondary/40 p-3 text-sm text-muted-foreground">
-              {application.rejectionReason}
-            </p>
-          ) : null}
-        </>
-      ) : (
-        <>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Thanks for your interest in STEMORA. The founders will review your request and approve
-            your school before you can access the platform.
-          </p>
-          {application ? (
-            <p className="mt-3 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">{application.schoolName}</span> ·
-              submitted {formatDate(application.submittedAt)} · still under review
-            </p>
-          ) : null}
-        </>
-      )}
+      <p className="mt-2 text-sm text-muted-foreground">
+        Thanks for your interest in STEMORA. The founders will review your request and approve your
+        school before you can access the platform.
+      </p>
+      {application ? (
+        <p className="mt-3 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">{application.schoolName}</span> · submitted{" "}
+          {formatDate(application.submittedAt)} · still under review
+        </p>
+      ) : null}
 
       {submitted === "1" && !user ? (
         <div className="mt-6 flex gap-2.5 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">

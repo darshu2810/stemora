@@ -73,7 +73,7 @@ export default function MarketingHomePage() {
               <Button
                 size="lg"
                 render={
-                  <Link href="/schools/new">
+                  <Link href="/register?as=school">
                     Start your school <ArrowRight className="size-4" />
                   </Link>
                 }
@@ -155,7 +155,7 @@ export default function MarketingHomePage() {
             size="lg"
             className="mt-8"
             render={
-              <Link href="/schools/new">
+              <Link href="/register?as=school">
                 Start your school <ArrowRight className="size-4" />
               </Link>
             }

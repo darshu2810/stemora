@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { landingForUserWithoutWorkspace } from "@/lib/auth/session";
+import { listJoinableSchools } from "@/lib/db/queries";
 
 export type AuthResult = { error: string } | undefined;
 
@@ -69,7 +70,13 @@ export async function signIn(_prev: AuthResult, formData: FormData): Promise<Aut
     // A `next` from the login redirect is only honoured for someone who has a
     // workspace to go back to. Anyone waiting, refused, or yet to apply goes
     // to the page that explains their position, whatever they were aiming at.
-    const terminal = ["/no-access", "/waitlist", "/schools/new"];
+    const terminal = [
+      "/no-access",
+      "/waitlist",
+      "/pending",
+      "/application-rejected",
+      "/register",
+    ];
     destination = terminal.includes(home) ? home : next || home;
   }
 
@@ -170,6 +177,103 @@ export async function applyForSchool(_prev: AuthResult, formData: FormData): Pro
 
   revalidatePath("/", "layout");
   redirect(signedIn ? "/waitlist" : "/waitlist?submitted=1");
+}
+
+/**
+ * Asks to join a school's STEM Club as a student.
+ *
+ * This creates an account and a request, not access. The membership lands at
+ * `pending` and opens nothing until the club head accepts it from the Students
+ * page — the database decides that, not this action: `handle_new_auth_user`
+ * grants `invited` only when a real invitation row exists, so a school id
+ * posted straight at the signup endpoint still comes out as a request.
+ */
+export async function registerStudent(_prev: AuthResult, formData: FormData): Promise<AuthResult> {
+  const fullName = String(formData.get("fullName") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim();
+  const schoolId = String(formData.get("schoolId") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+
+  if (!fullName) return { error: "Enter your full name." };
+  if (!email) return { error: "Enter your school email address." };
+  if (!schoolId) return { error: "Choose the school you want to join." };
+  if (password.length < 8) return { error: "Choose a password of at least 8 characters." };
+
+  // Reject an unknown school here rather than letting the signup succeed and
+  // quietly produce an account that belongs to nothing.
+  const schools = await listJoinableSchools();
+  const school = schools.find((s) => s.id === schoolId);
+  if (!school) return { error: "That school isn't on STEMORA. Pick one from the list." };
+
+  // The account is created server-side with its address already marked
+  // confirmed, and no email is sent. Verifying the mailbox would decide nothing
+  // here — the club head is the gate — so there is no second mechanism to fall
+  // back to. If this cannot run, registration fails loudly rather than quietly
+  // becoming a different, weaker flow.
+  const created = await createConfirmedStudent(email, password, fullName, schoolId);
+
+  if (created.outcome === "duplicate") {
+    return {
+      error:
+        "An account already exists for that email. Log in instead, or reset your password if you've forgotten it.",
+    };
+  }
+
+  if (created.outcome === "misconfigured") {
+    // The reason names a server secret, so it goes to the server log and never
+    // to the browser.
+    console.error("[registerStudent] cannot create accounts:", created.reason);
+    return {
+      error:
+        "Student registration isn't available right now because of a server configuration problem. Nothing was created — please tell your club head or the STEMORA founders.",
+    };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+  revalidatePath("/", "layout");
+  // The request is recorded either way; a failed sign-in only means they have
+  // to log in by hand, and /login will route them to /pending.
+  redirect(error ? "/login" : "/pending");
+}
+
+type StudentCreation =
+  | { outcome: "ok" }
+  | { outcome: "duplicate" }
+  | { outcome: "misconfigured"; reason: string };
+
+/**
+ * Creates a student's account with its address already confirmed, sending no
+ * email at all.
+ *
+ * This needs the service role key, which is server-only and never reaches the
+ * browser. Its absence is a deployment fault, not a user error, so it is
+ * reported as one instead of being worked around.
+ */
+async function createConfirmedStudent(
+  email: string,
+  password: string,
+  fullName: string,
+  schoolId: string,
+): Promise<StudentCreation> {
+  try {
+    const admin = createAdminClient();
+    const { error } = await admin.auth.admin.createUser({
+      email,
+      password,
+      // No confirmation email: School Admin approval is the gate.
+      email_confirm: true,
+      user_metadata: { full_name: fullName, school_id: schoolId },
+    });
+
+    if (!error) return { outcome: "ok" };
+    if (/already|registered|exists/i.test(error.message)) return { outcome: "duplicate" };
+    return { outcome: "misconfigured", reason: error.message };
+  } catch (e) {
+    // createAdminClient throws when SUPABASE_SERVICE_ROLE_KEY is unset.
+    return { outcome: "misconfigured", reason: e instanceof Error ? e.message : "Unknown error" };
+  }
 }
 
 /**

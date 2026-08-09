@@ -117,7 +117,7 @@ export async function applicationFor(userId: string): Promise<ApplicationStandin
  * Why a signed-in user has no workspace: they belong to no school, or their
  * School Admin has closed their access.
  */
-export type BlockedReason = "invited" | "suspended" | "removed";
+export type BlockedReason = "pending" | "invited" | "suspended" | "removed";
 
 /**
  * The standing of a signed-in user who has no *active* membership. Null means
@@ -162,22 +162,27 @@ export async function requireSession(role?: UserRole): Promise<Session> {
 /**
  * Where a signed-in account with no active membership belongs. Every caller
  * routes through this, which is what stops the old bounce between /login and
- * /schools/new: each state has exactly one destination, and /waitlist and
- * /no-access are both terminal.
+ * /register: each state has exactly one destination, and /waitlist, /pending,
+ * /application-rejected, and /no-access are all terminal.
  */
 export async function landingForUserWithoutWorkspace(userId: string): Promise<string> {
   // Access a School Admin paused or closed: say so, rather than offering a
   // registration form they never asked for.
   const blocked = await getBlockedReason(userId);
+  // A student who asked to join and is waiting on the club head. Terminal, and
+  // distinct from /no-access: nobody has refused them anything yet.
+  if (blocked === "pending") return "/pending";
   if (blocked) return "/no-access";
 
-  // Waiting on the founders, or turned down: both are terminal pages that
-  // explain the position and never redirect onward.
+  // Waiting on the founders, or turned down. Both are terminal, and they are
+  // different answers: "still under review" and "refused" must never share a
+  // page, or a rejected applicant is told they are still in a queue.
   const application = await applicationFor(userId);
-  if (application && application.status !== "approved") return "/waitlist";
+  if (application?.status === "pending") return "/waitlist";
+  if (application?.status === "rejected") return "/application-rejected";
 
-  // Never applied. The form is the right place.
-  return "/schools/new";
+  // Never applied, or approved without a membership. The form is the right place.
+  return "/register";
 }
 
 export function dashboardFor(role: UserRole): string {
@@ -194,7 +199,7 @@ export function dashboardFor(role: UserRole): string {
 /** The School Admin's school id, or a redirect. Used by every /school page. */
 export async function requireSchoolAdmin(): Promise<Session & { schoolId: string }> {
   const session = await requireSession("school_admin");
-  if (!session.schoolId) redirect("/schools/new");
+  if (!session.schoolId) redirect("/register?as=school");
   return session as Session & { schoolId: string };
 }
 

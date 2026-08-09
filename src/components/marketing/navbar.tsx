@@ -32,7 +32,7 @@ export function MarketingNavbar() {
         <div className="hidden items-center gap-1 md:flex">
           <ThemeToggle />
           <Button variant="ghost" render={<Link href="/login">Log in</Link>} />
-          <Button render={<Link href="/schools/new">Start your school</Link>} />
+          <Button render={<Link href="/register?as=school">Start your school</Link>} />
         </div>
 
         <div className="flex items-center gap-1 md:hidden">
@@ -75,7 +75,7 @@ export function MarketingNavbar() {
                 />
                 <Button
                   render={
-                    <Link href="/schools/new" onClick={() => setOpen(false)}>
+                    <Link href="/register?as=school" onClick={() => setOpen(false)}>
                       Start your school
                     </Link>
                   }

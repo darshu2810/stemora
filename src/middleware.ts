@@ -8,8 +8,10 @@ const PUBLIC_PATHS = [
   "/features",
   "/contact",
   "/login",
-  // Applying is where an account is created, so it has to be reachable without
-  // one. A signed-in visitor is routed onward below.
+  // Registering is where an account is created, so it has to be reachable
+  // without one. A signed-in visitor is routed onward below. `/schools/new` is
+  // the old address for the School Admin half and now redirects here.
+  "/register",
   "/schools/new",
   // Terminal: reachable signed in or out, and never redirects onward. This is
   // what an applicant sees instead of being bounced back to the form.
@@ -66,7 +68,7 @@ export async function middleware(request: NextRequest) {
   // A signed-in user has no reason to sit on the entry pages. Each state below
   // resolves to exactly one destination, and /waitlist is terminal, so there is
   // no pair of rules that can hand a visitor back and forth.
-  const ENTRY_PATHS = ["/login", "/schools/new", "/waitlist"];
+  const ENTRY_PATHS = ["/login", "/register", "/schools/new", "/waitlist"];
   if (user && ENTRY_PATHS.includes(pathname)) {
     const goTo = (to: string) => {
       const url = request.nextUrl.clone();
@@ -77,24 +79,25 @@ export async function middleware(request: NextRequest) {
 
     const [{ data: profile }, { data: membership }] = await Promise.all([
       supabase.from("users").select("platform_role").eq("id", user.id).maybeSingle(),
-      supabase
-        .from("school_members")
-        .select("role")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .maybeSingle(),
+      supabase.from("school_members").select("role, status").eq("user_id", user.id).maybeSingle(),
     ]);
 
     if (profile?.platform_role === "platform_owner") {
       return pathname === "/platform/dashboard" ? response : goTo("/platform/dashboard");
     }
 
-    if (membership) {
+    if (membership?.status === "active") {
       return goTo(membership.role === "school_admin" ? "/school/dashboard" : "/student/dashboard");
     }
 
-    // No workspace. Whether they are waiting, refused, or have yet to apply is
-    // the application's business, not the login page's.
+    // Asked to join a club and waiting on its club head.
+    if (membership?.status === "pending") return goTo("/pending");
+
+    // Invited but not accepted, paused, or closed — /no-access says which.
+    if (membership) return goTo("/no-access");
+
+    // No school at all. Whether they are waiting on the founders, refused, or
+    // have yet to apply is the application's business, not the login page's.
     const { data: application } = await supabase
       .from("school_applications")
       .select("status")
@@ -103,11 +106,20 @@ export async function middleware(request: NextRequest) {
       .limit(1)
       .maybeSingle();
 
-    const waiting = application && application.status !== "approved";
+    if (application?.status === "pending") {
+      return pathname === "/waitlist" ? response : goTo("/waitlist");
+    }
 
-    if (waiting) return pathname === "/waitlist" ? response : goTo("/waitlist");
-    // Never applied: the form is the only place that helps.
-    if (pathname !== "/schools/new") return goTo("/schools/new");
+    // Refused. Reapplying is allowed — the database only blocks a second
+    // *pending* request — so /register stays open to them; anywhere else, the
+    // page that says what actually happened.
+    if (application?.status === "rejected") {
+      return pathname === "/register" ? response : goTo("/application-rejected");
+    }
+
+    // Never applied, or approved without a membership: the register page is the
+    // only place that helps.
+    if (pathname !== "/register") return goTo("/register");
   }
 
   return response;

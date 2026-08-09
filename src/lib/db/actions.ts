@@ -264,6 +264,45 @@ export async function revokeInvitation(_prev: ActionResult | undefined, fd: Form
 }
 
 /**
+ * Accepts or declines a student who asked to join the club themselves.
+ *
+ * Separate from `setMemberStatus` because it is a different question: that one
+ * changes access someone already has, this one decides whether they get any.
+ * Declining keeps the row at `removed` rather than deleting it, so the club
+ * head can see they were turned down instead of watching the same request
+ * reappear as if it were new.
+ */
+export async function decideJoinRequest(
+  _prev: ActionResult | undefined,
+  fd: FormData,
+): Promise<ActionResult> {
+  const session = await requireSchoolAdmin();
+  const userId = str(fd, "userId");
+  const decision = str(fd, "decision");
+
+  if (decision !== "accept" && decision !== "decline") {
+    return fail("That is not a decision.");
+  }
+
+  const supabase = await createClient();
+  const { error, count } = await supabase
+    .from("school_members")
+    .update({ status: decision === "accept" ? "active" : "removed" }, { count: "exact" })
+    .eq("school_id", session.schoolId)
+    .eq("user_id", userId)
+    // Only a standing request can be decided, so two club heads clicking at
+    // once cannot have the second one overwrite the first one's answer.
+    .eq("status", "pending");
+
+  if (error) return fail(error.message);
+  if (!count) return fail("That request has already been dealt with.");
+
+  revalidatePath("/school/students");
+  revalidatePath("/school/dashboard");
+  return ok;
+}
+
+/**
  * Suspends, restores, or removes someone's access. Suspending keeps the person
  * and their work on the roster but closes the door immediately; restoring
  * reopens it. Nothing here deletes a student's contributions.
