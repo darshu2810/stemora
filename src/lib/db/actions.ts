@@ -597,6 +597,13 @@ export async function toggleRsvp(_prev: ActionResult | undefined, fd: FormData):
 
 // --- Resources --------------------------------------------------------------
 
+/** Where a school's uploads live. The first path segment is the tenant, which
+ *  is exactly what the storage policies key on. */
+function storageKey(schoolId: string, fileName: string) {
+  const safe = fileName.replace(/[^\w.\-]+/g, "_").slice(-120);
+  return `${schoolId}/${crypto.randomUUID()}-${safe}`;
+}
+
 export async function addResource(_prev: ActionResult | undefined, fd: FormData): Promise<ActionResult> {
   const session = await requireSchoolAdmin();
   const supabase = await createClient();
@@ -610,18 +617,43 @@ export async function addResource(_prev: ActionResult | undefined, fd: FormData)
   // No category means a general club resource.
   const category = str(fd, "category");
 
+  let storagePath: string | null = null;
+  let sizeBytes: number | null = null;
+
+  if (type === "file") {
+    const file = fd.get("file");
+    if (!(file instanceof File) || file.size === 0) return fail("Choose a file to upload.");
+    if (file.size > 25 * 1024 * 1024) return fail("Files must be 25 MB or smaller.");
+
+    const key = storageKey(session.schoolId, file.name);
+    const upload = await supabase.storage
+      .from("resources")
+      .upload(key, file, { contentType: file.type || "application/octet-stream" });
+
+    if (upload.error) return fail(upload.error.message);
+    storagePath = key;
+    sizeBytes = file.size;
+  }
+
   const { error } = await supabase.from("resources").insert({
     school_id: session.schoolId,
     title,
     category: category ? (category as ProjectCategory) : null,
     type,
     url: type === "link" ? url : null,
-    storage_path: type === "file" ? str(fd, "storagePath") || `pending/${title}` : null,
+    storage_path: storagePath,
+    size_bytes: sizeBytes,
     uploaded_by: session.userId,
   });
 
-  if (error) return fail(error.message);
+  // Don't leave an orphaned object behind if the row fails to insert.
+  if (error) {
+    if (storagePath) await supabase.storage.from("resources").remove([storagePath]);
+    return fail(error.message);
+  }
+
   revalidatePath("/school/resources");
+  revalidatePath("/student/resources");
   return ok;
 }
 
@@ -629,14 +661,31 @@ export async function deleteResource(_prev: ActionResult | undefined, fd: FormDa
   const session = await requireSchoolAdmin();
   const supabase = await createClient();
 
+  const resourceId = str(fd, "resourceId");
+
+  // Read the path first: once the row is gone there is nothing left pointing
+  // at the object, and it would sit in the bucket forever.
+  const { data: existing } = await supabase
+    .from("resources")
+    .select("storage_path")
+    .eq("id", resourceId)
+    .eq("school_id", session.schoolId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("resources")
     .delete()
-    .eq("id", str(fd, "resourceId"))
+    .eq("id", resourceId)
     .eq("school_id", session.schoolId);
 
   if (error) return fail(error.message);
+
+  if (existing?.storage_path) {
+    await supabase.storage.from("resources").remove([existing.storage_path]);
+  }
+
   revalidatePath("/school/resources");
+  revalidatePath("/student/resources");
   return ok;
 }
 

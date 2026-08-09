@@ -1,16 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { toast } from "sonner";
-import { Plus, Library, FileText, Link2 } from "lucide-react";
+import { Plus, FileText, Link2, Library, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
-import { CategoryFilter, ALL_CATEGORIES } from "@/components/shared/category-filter";
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
+import { CategoryFilter, ALL_CATEGORIES } from "@/components/shared/category-filter";
+import { ActionForm, SubmitButton, ActionButton } from "@/components/shared/action-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
@@ -21,188 +19,181 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
 import { formatDate } from "@/lib/utils";
-import {
-  mockResources as initialResources,
-  mockSchool,
-  mockUsers,
-  RESOURCE_CATEGORIES,
-  DEMO_TODAY,
-  type Resource,
-  type ResourceCategory,
-  type ResourceType,
-} from "@/lib/mock-data";
+import { PROJECT_CATEGORIES } from "@/config/categories";
+import { addResource, deleteResource } from "@/lib/db/actions";
+import type { ResourceWithUploader } from "@/lib/db/queries";
 
 const TYPE_LABELS: Record<string, string> = { link: "Link", file: "File" };
+const GENERAL = "General";
 
-const resourceSchema = z.object({
-  title: z.string().min(2, "Enter a title"),
-  type: z.custom<ResourceType>(),
-  category: z.custom<ResourceCategory>(),
-  meta: z.string().min(2, "Enter a link or file size"),
-});
-type ResourceValues = z.infer<typeof resourceSchema>;
+function formatSize(bytes: number | null) {
+  if (bytes === null) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 /**
- * The STEM Club's shared library. Resources belong to the club; the category
- * mirrors the project categories so a student can find the electronics notes
- * without there being an electronics club.
+ * The club's shared files and links. Files live in a private Supabase Storage
+ * bucket and are reached through a short-lived signed URL, so a resource is
+ * only ever readable by someone who is still a member of the school.
  */
-export function ResourceLibraryView({ canManage }: { canManage: boolean }) {
-  const [resources, setResources] = React.useState<Resource[]>(initialResources);
+export function ResourceLibraryView({
+  clubName,
+  resources,
+  canManage,
+}: {
+  clubName: string;
+  resources: ResourceWithUploader[];
+  canManage: boolean;
+}) {
   const [category, setCategory] = React.useState<string>(ALL_CATEGORIES);
+  const [type, setType] = React.useState<string>("link");
   const [open, setOpen] = React.useState(false);
 
-  const form = useForm<ResourceValues>({
-    resolver: zodResolver(resourceSchema),
-    defaultValues: { title: "", type: "link", category: "General", meta: "" },
-  });
+  const categoryLabels = {
+    [GENERAL]: GENERAL,
+    ...Object.fromEntries(PROJECT_CATEGORIES.map((c) => [c, c])),
+  };
 
-  const filtered = resources.filter((r) => category === ALL_CATEGORIES || r.category === category);
+  const filtered = resources.filter(
+    (r) => category === ALL_CATEGORIES || (r.category ?? GENERAL) === category,
+  );
 
-  function onAdd(values: ResourceValues) {
-    setResources((prev) => [
-      {
-        id: `res_new_${prev.length}_${values.title.length}`,
-        title: values.title,
-        category: values.category,
-        type: values.type,
-        meta: values.meta,
-        uploadedBy: mockUsers.school_admin.name,
-        date: DEMO_TODAY,
-      },
-      ...prev,
-    ]);
-    toast.success(`${values.title} added to the library`);
-    form.reset();
-    setOpen(false);
-  }
-
-  const columns: DataTableColumn<Resource>[] = [
+  const columns: DataTableColumn<ResourceWithUploader>[] = [
     {
       key: "title",
       header: "Resource",
-      render: (r) => (
-        <div className="flex items-center gap-2.5">
-          {r.type === "file" ? (
-            <FileText className="size-4 shrink-0 text-muted-foreground" />
-          ) : (
-            <Link2 className="size-4 shrink-0 text-muted-foreground" />
-          )}
-          <div>
-            <p className="font-medium">{r.title}</p>
-            <p className="text-xs text-muted-foreground">{r.meta}</p>
+      render: (r) => {
+        const href = r.type === "file" ? `/api/resources/${r.id}/download` : r.url ?? "#";
+        return (
+          <div className="flex items-center gap-2.5">
+            {r.type === "file" ? (
+              <FileText className="size-4 shrink-0 text-muted-foreground" />
+            ) : (
+              <Link2 className="size-4 shrink-0 text-muted-foreground" />
+            )}
+            <div className="min-w-0">
+              <a
+                href={href}
+                target={r.type === "link" ? "_blank" : undefined}
+                rel={r.type === "link" ? "noreferrer noopener" : undefined}
+                className="font-medium hover:text-primary hover:underline"
+              >
+                {r.title}
+              </a>
+              <p className="truncate text-xs text-muted-foreground">
+                {r.type === "file" ? formatSize(r.size_bytes) : r.url}
+              </p>
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
-    { key: "category", header: "Category", render: (r) => r.category },
-    { key: "uploadedBy", header: "Uploaded by", render: (r) => r.uploadedBy },
-    { key: "date", header: "Date", render: (r) => formatDate(r.date), className: "text-muted-foreground" },
+    { key: "category", header: "Category", render: (r) => r.category ?? GENERAL },
+    { key: "uploadedBy", header: "Added by", render: (r) => r.uploaderName },
+    {
+      key: "date",
+      header: "Date",
+      render: (r) => formatDate(r.created_at),
+      className: "text-muted-foreground",
+    },
+    ...(canManage
+      ? [
+          {
+            key: "actions",
+            header: "",
+            render: (r: ResourceWithUploader) => (
+              <ActionButton
+                action={deleteResource}
+                fields={{ resourceId: r.id }}
+                size="icon"
+                ariaLabel={`Delete ${r.title}`}
+              >
+                <Trash2 className="size-4" />
+              </ActionButton>
+            ),
+          },
+        ]
+      : []),
   ];
 
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow={mockSchool.clubName}
+        eyebrow={clubName}
         title="Resources"
-        description={`${resources.length} files and links shared with the club.`}
+        description={
+          resources.length === 0
+            ? "Files and links shared with the club will appear here."
+            : `${resources.length} ${resources.length === 1 ? "file or link" : "files and links"} shared with the club.`
+        }
         actions={
           canManage ? (
             <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger render={<Button><Plus className="size-4" /> Upload Resource</Button>} />
+              <DialogTrigger render={<Button><Plus className="size-4" /> Add Resource</Button>} />
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Upload a resource</DialogTitle>
+                  <DialogTitle>Add a resource</DialogTitle>
                   <DialogDescription>Share a file or a link with everyone in the STEM Club.</DialogDescription>
                 </DialogHeader>
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onAdd)} className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="title"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Title</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Build Log Template.docx" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="type"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Type</FormLabel>
-                            <Select items={TYPE_LABELS} value={field.value} onValueChange={field.onChange}>
-                              <FormControl>
-                                <SelectTrigger className="w-full">
-                                  <SelectValue />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {Object.entries(TYPE_LABELS).map(([value, label]) => (
-                                  <SelectItem key={value} value={value}>{label}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="category"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Category</FormLabel>
-                            <Select value={field.value} onValueChange={field.onChange}>
-                              <FormControl>
-                                <SelectTrigger className="w-full">
-                                  <SelectValue />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {RESOURCE_CATEGORIES.map((c) => (
-                                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
+                <ActionForm action={addResource} onSuccess={() => setOpen(false)}>
+                  <div className="space-y-2">
+                    <Label htmlFor="resource-title">Title</Label>
+                    <Input id="resource-title" name="title" placeholder="Build log template" required />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="resource-type">Type</Label>
+                      <Select items={TYPE_LABELS} value={type} onValueChange={(v) => setType(v ?? "link")} name="type">
+                        <SelectTrigger id="resource-type" className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(TYPE_LABELS).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>{label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="resource-category">Category</Label>
+                      <Select items={categoryLabels} defaultValue={GENERAL} name="category">
+                        <SelectTrigger id="resource-category" className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={GENERAL}>{GENERAL}</SelectItem>
+                          {PROJECT_CATEGORIES.map((c) => (
+                            <SelectItem key={c} value={c}>{c}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {type === "link" ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="resource-url">Link</Label>
+                      <Input
+                        id="resource-url"
+                        name="url"
+                        type="url"
+                        placeholder="https://docs.arduino.cc"
+                        required
                       />
                     </div>
-                    <FormField
-                      control={form.control}
-                      name="meta"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Link or file size</FormLabel>
-                          <FormControl>
-                            <Input placeholder="docs.arduino.cc or 2.1 MB" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <DialogFooter>
-                      <Button type="submit" disabled={form.formState.isSubmitting}>Upload Resource</Button>
-                    </DialogFooter>
-                  </form>
-                </Form>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="resource-file">File</Label>
+                      <Input id="resource-file" name="file" type="file" required />
+                      <p className="text-xs text-muted-foreground">Up to 25 MB.</p>
+                    </div>
+                  )}
+                  <DialogFooter>
+                    <SubmitButton pendingLabel="Adding…">Add Resource</SubmitButton>
+                  </DialogFooter>
+                </ActionForm>
               </DialogContent>
             </Dialog>
           ) : undefined
@@ -216,10 +207,22 @@ export function ResourceLibraryView({ canManage }: { canManage: boolean }) {
         searchPlaceholder="Search resources…"
         searchFn={(r, q) => r.title.toLowerCase().includes(q.toLowerCase())}
         emptyIcon={Library}
-        emptyTitle="No resources in this category yet"
-        emptyDescription="Choose a different category, or upload the first file for this one."
+        emptyTitle={resources.length === 0 ? "No resources yet" : "No resources match your search"}
+        emptyDescription={
+          resources.length === 0
+            ? canManage
+              ? "Add the first file or link for the club."
+              : "Your School Admin hasn't shared anything yet."
+            : "Try a different word, or another category."
+        }
         toolbar={
-          <CategoryFilter value={category} onChange={setCategory} categories={RESOURCE_CATEGORIES} />
+          resources.length > 0 ? (
+            <CategoryFilter
+              value={category}
+              onChange={setCategory}
+              categories={[GENERAL, ...PROJECT_CATEGORIES]}
+            />
+          ) : undefined
         }
       />
     </div>

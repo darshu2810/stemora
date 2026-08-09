@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn, formatDate } from "@/lib/utils";
-import type { BoardCard, BoardColumnId } from "@/lib/mock-data";
+import type { BoardCard, BoardColumnId } from "@/lib/board";
 
 const PRIORITY_STYLES: Record<BoardCard["priority"], string> = {
   low: "bg-muted text-muted-foreground",
@@ -110,10 +110,12 @@ export function KanbanBoard({
                     <span className={cn("rounded-full px-2 py-0.5 font-mono text-[0.6rem] uppercase tracking-wide", PRIORITY_STYLES[card.priority])}>
                       {card.priority}
                     </span>
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <CalendarDays className="size-3" />
-                      {formatDate(card.dueDate)}
-                    </span>
+                    {card.dueDate ? (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <CalendarDays className="size-3" />
+                        {formatDate(card.dueDate)}
+                      </span>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-1.5 pt-0.5">
                     <Avatar className="size-5">

@@ -351,12 +351,202 @@ export async function listAnnouncements(schoolId: string): Promise<AnnouncementW
   }));
 }
 
+// --- Platform ---------------------------------------------------------------
+
+/**
+ * A school as the Platform Owner sees it. Deliberately shallow: RLS lets a
+ * Platform Owner read schools and memberships, but not what happens inside a
+ * club — no projects, announcements, or resources. Counting those here would
+ * silently return zero rather than the truth, so they are not offered.
+ */
+export type PlatformSchoolRow = {
+  id: string;
+  name: string;
+  district: string | null;
+  clubName: string;
+  status: string;
+  createdAt: string;
+  students: number;
+  admins: number;
+  pending: number;
+};
+
+export async function listSchoolsForPlatform(): Promise<PlatformSchoolRow[]> {
+  const supabase = await createClient();
+
+  const [{ data: schools }, { data: members }] = await Promise.all([
+    supabase
+      .from("schools")
+      .select("id, name, district, club_name, status, created_at")
+      .order("created_at", { ascending: false }),
+    supabase.from("school_members").select("school_id, role, status"),
+  ]);
+
+  const tally = new Map<string, { students: number; admins: number; pending: number }>();
+  for (const m of members ?? []) {
+    const t = tally.get(m.school_id) ?? { students: 0, admins: 0, pending: 0 };
+    if (m.status === "invited") t.pending += 1;
+    else if (m.status === "active") {
+      if (m.role === "school_admin") t.admins += 1;
+      else if (m.role === "student") t.students += 1;
+    }
+    tally.set(m.school_id, t);
+  }
+
+  return (schools ?? []).map((s) => {
+    const t = tally.get(s.id) ?? { students: 0, admins: 0, pending: 0 };
+    return {
+      id: s.id,
+      name: s.name,
+      district: s.district,
+      clubName: s.club_name,
+      status: s.status,
+      createdAt: s.created_at,
+      ...t,
+    };
+  });
+}
+
+// --- Recent activity --------------------------------------------------------
+
+export type ActivityItem = {
+  id: string;
+  kind: "announcement" | "resource" | "competition" | "event";
+  text: string;
+  actor: string;
+  date: string;
+};
+
+/**
+ * The last things that actually happened in the club, composed from the rows
+ * themselves rather than from an event log. Nothing here is narrated: if the
+ * club has posted nothing, this is empty.
+ */
+export async function listRecentActivity(
+  schoolId: string,
+  limit = 5,
+): Promise<ActivityItem[]> {
+  const supabase = await createClient();
+  const recent = { ascending: false } as const;
+
+  const [announcements, resources, competitions, events] = await Promise.all([
+    supabase
+      .from("announcements")
+      .select("id, title, created_at, users:author_id(full_name)")
+      .eq("school_id", schoolId)
+      .order("created_at", recent)
+      .limit(limit),
+    supabase
+      .from("resources")
+      .select("id, title, created_at, users:uploaded_by(full_name)")
+      .eq("school_id", schoolId)
+      .order("created_at", recent)
+      .limit(limit),
+    supabase
+      .from("competitions")
+      .select("id, name, created_at")
+      .eq("school_id", schoolId)
+      .order("created_at", recent)
+      .limit(limit),
+    supabase
+      .from("events")
+      .select("id, title, created_at, users:created_by(full_name)")
+      .eq("school_id", schoolId)
+      .order("created_at", recent)
+      .limit(limit),
+  ]);
+
+  const nameOf = (row: { users?: unknown }) =>
+    (row.users as { full_name: string } | null)?.full_name ?? "";
+
+  const items: ActivityItem[] = [
+    ...(announcements.data ?? []).map((a) => ({
+      id: `a-${a.id}`,
+      kind: "announcement" as const,
+      text: `Posted “${a.title}”`,
+      actor: nameOf(a),
+      date: a.created_at,
+    })),
+    ...(resources.data ?? []).map((r) => ({
+      id: `r-${r.id}`,
+      kind: "resource" as const,
+      text: `Added “${r.title}” to the library`,
+      actor: nameOf(r),
+      date: r.created_at,
+    })),
+    ...(competitions.data ?? []).map((c) => ({
+      id: `c-${c.id}`,
+      kind: "competition" as const,
+      text: `Entered ${c.name}`,
+      actor: "",
+      date: c.created_at,
+    })),
+    ...(events.data ?? []).map((e) => ({
+      id: `e-${e.id}`,
+      kind: "event" as const,
+      text: `Scheduled ${e.title}`,
+      actor: nameOf(e),
+      date: e.created_at,
+    })),
+  ];
+
+  return items
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+    .slice(0, limit);
+}
+
 // --- Achievements & profile -------------------------------------------------
 
 export async function listBadges(): Promise<Badge[]> {
   const supabase = await createClient();
   const { data } = await supabase.from("badges").select("*").order("sort_order");
   return data ?? [];
+}
+
+export type AchievementWithBadge = StudentAchievement & {
+  badgeName: string;
+  badgeDescription: string;
+};
+
+/** A student's awards with the badge they were given, newest first. */
+export async function achievementsWithBadges(
+  schoolId: string,
+  userId: string,
+): Promise<AchievementWithBadge[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("student_achievements")
+    .select("*, badges(name, description)")
+    .eq("school_id", schoolId)
+    .eq("user_id", userId)
+    .order("earned_at", { ascending: false });
+
+  return (data ?? []).map((a) => {
+    const badge = a.badges as unknown as { name: string; description: string } | null;
+    return {
+      ...(a as unknown as StudentAchievement),
+      badgeName: badge?.name ?? "",
+      badgeDescription: badge?.description ?? "",
+    };
+  });
+}
+
+/** The competitions this student is actually on the roster for. */
+export async function competitionsForStudent(
+  schoolId: string,
+  userId: string,
+): Promise<Competition[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("competition_participants")
+    .select("competitions(*)")
+    .eq("school_id", schoolId)
+    .eq("user_id", userId);
+
+  return (data ?? [])
+    .map((row) => row.competitions as unknown as Competition | null)
+    .filter((c): c is Competition => Boolean(c))
+    .sort((a, b) => (a.event_date < b.event_date ? 1 : -1));
 }
 
 export async function achievementsForUser(

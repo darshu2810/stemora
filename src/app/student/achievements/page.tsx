@@ -1,4 +1,5 @@
 import {
+  Award,
   Lightbulb,
   Users2,
   FlaskConical,
@@ -11,34 +12,41 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { cn, formatDate } from "@/lib/utils";
-import { mockSchool, mockUsers, mockAchievements, BADGE_DEFS, type BadgeId } from "@/lib/mock-data";
+import { requireStudent } from "@/lib/auth/session";
+import { achievementsWithBadges, listBadges } from "@/lib/db/queries";
 
-const BADGE_ICONS: Record<BadgeId, LucideIcon> = {
-  innovation: Lightbulb,
-  leadership: Users2,
-  science_fair: FlaskConical,
-  programmer: Code2,
-  engineering: Cog,
-  robotics_finalist: Trophy,
-  peer_coach: HeartHandshake,
+// Keyed on the badge's name as stored in the `badges` table. A badge added by
+// a future migration falls back to a generic award icon rather than crashing.
+const BADGE_ICONS: Record<string, LucideIcon> = {
+  "Innovation Award": Lightbulb,
+  "STEM Leadership Award": Users2,
+  "Science Fair Winner": FlaskConical,
+  "Outstanding Programmer": Code2,
+  "Best Engineering Design": Cog,
+  "Robotics Competition Finalist": Trophy,
+  "Peer Coach": HeartHandshake,
 };
 
-export default function AchievementsPage() {
-  const student = mockUsers.student;
-  const earned = mockAchievements[student.id] ?? [];
-  const earnedMap = new Map(earned.map((a) => [a.badgeId, a]));
+export default async function AchievementsPage() {
+  const session = await requireStudent();
+  const [badges, earned] = await Promise.all([
+    listBadges(),
+    achievementsWithBadges(session.schoolId, session.userId),
+  ]);
+
+  const earnedMap = new Map(earned.map((a) => [a.badge_id, a]));
 
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow={mockSchool.clubName}
+        eyebrow={session.clubName ?? "STEM Club"}
         title="Achievements"
-        description={`${earned.length} of ${BADGE_DEFS.length} club awards earned.`}
+        description={`${earned.length} of ${badges.length} club awards earned.`}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {BADGE_DEFS.map((badge) => {
-          const Icon = BADGE_ICONS[badge.id];
+        {badges.map((badge) => {
+          const Icon = BADGE_ICONS[badge.name] ?? Award;
           const record = earnedMap.get(badge.id);
           const isEarned = !!record;
           return (
@@ -55,13 +63,17 @@ export default function AchievementsPage() {
                   isEarned ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
                 )}
               >
-                {isEarned ? <Icon className="size-5" strokeWidth={1.75} /> : <Lock className="size-4" strokeWidth={1.75} />}
+                {isEarned ? (
+                  <Icon className="size-5" strokeWidth={1.75} />
+                ) : (
+                  <Lock className="size-4" strokeWidth={1.75} />
+                )}
               </div>
               <h3 className="mt-3 font-display font-semibold">{badge.name}</h3>
               <p className="mt-1 text-xs text-muted-foreground">{badge.description}</p>
-              {isEarned ? (
+              {record ? (
                 <p className="mt-3 font-mono text-[0.65rem] uppercase tracking-wider text-primary">
-                  Earned {formatDate(record.earnedAt)}
+                  Earned {formatDate(record.earned_at)}
                 </p>
               ) : (
                 <p className="mt-3 font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">

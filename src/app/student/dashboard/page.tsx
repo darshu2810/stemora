@@ -5,39 +5,49 @@ import { StatCard } from "@/components/shared/stat-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Progress } from "@/components/ui/progress";
 import { formatDate } from "@/lib/utils";
+import { requireStudent } from "@/lib/auth/session";
+import { progressPercent } from "@/lib/board";
 import {
-  mockSchool,
-  mockUsers,
-  mockAnnouncements,
-  mockCompetitions,
-  mockAchievements,
-  BADGE_DEFS,
   BOARD_COLUMNS,
-  upcomingEvents,
+  achievementsWithBadges,
+  competitionsForStudent,
+  listAnnouncements,
+  listEvents,
+  listTasksForUser,
   projectsForStudent,
-  tasksForStudent,
-  getProjectProgress,
-} from "@/lib/mock-data";
+  taskCountsByProject,
+  todayISO,
+} from "@/lib/db/queries";
 
 const COLUMN_LABEL = Object.fromEntries(BOARD_COLUMNS.map((c) => [c.id, c.name]));
 
-export default function StudentDashboardPage() {
-  const student = mockUsers.student;
-  const achievements = mockAchievements[student.id] ?? [];
-  const myProjects = projectsForStudent(student.id);
-  const myTasks = tasksForStudent(student.id);
-  const openTaskList = myTasks.filter((t) => t.column !== "done");
-  const events = upcomingEvents().slice(0, 3);
-  const myCompetitions = mockCompetitions.filter(
-    (c) => c.status === "upcoming" && c.participantIds.includes(student.id),
-  );
-  const latestAnnouncement = [...mockAnnouncements].sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+export default async function StudentDashboardPage() {
+  const session = await requireStudent();
+  const { schoolId, userId } = session;
+
+  const [myProjects, myTasks, events, announcements, achievements, competitions, taskCounts] =
+    await Promise.all([
+      projectsForStudent(schoolId, userId),
+      listTasksForUser(schoolId, userId),
+      listEvents(schoolId),
+      listAnnouncements(schoolId),
+      achievementsWithBadges(schoolId, userId),
+      competitionsForStudent(schoolId, userId),
+      taskCountsByProject(schoolId),
+    ]);
+
+  const today = todayISO();
+  const openTaskList = myTasks.filter((t) => t.column_id !== "done");
+  const upcoming = events.filter((e) => e.event_date >= today).slice(0, 3);
+  const myCompetitions = competitions.filter((c) => c.status === "upcoming");
+  const latestAnnouncement = announcements[0] ?? null;
+  const firstName = session.fullName.split(" ")[0];
 
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow={mockSchool.clubName}
-        title={`Welcome back, ${student.name.split(" ")[0]}`}
+        eyebrow={session.clubName ?? "STEM Club"}
+        title={`Welcome back, ${firstName}`}
         description="Everything you owe the club, and everything coming up."
       />
 
@@ -65,11 +75,12 @@ export default function StudentDashboardPage() {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{t.title}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {t.projectName} · Due {formatDate(t.dueDate)}
+                      {t.projectName}
+                      {t.due_date ? ` · Due ${formatDate(t.due_date)}` : ""}
                     </p>
                   </div>
                   <span className="shrink-0 font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">
-                    {COLUMN_LABEL[t.column]}
+                    {COLUMN_LABEL[t.column_id]}
                   </span>
                 </div>
               ))}
@@ -84,15 +95,15 @@ export default function StudentDashboardPage() {
               View all <ArrowRight className="size-3" />
             </Link>
           </div>
-          {events.length === 0 ? (
-            <p className="mt-4 text-sm text-muted-foreground">Nothing is scheduled yet.</p>
+          {upcoming.length === 0 ? (
+            <p className="mt-4 text-sm text-muted-foreground">No upcoming events.</p>
           ) : (
             <div className="mt-4 space-y-3">
-              {events.map((e) => (
+              {upcoming.map((e) => (
                 <div key={e.id}>
                   <p className="text-sm font-medium">{e.title}</p>
                   <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                    <MapPin className="size-3" /> {e.location} · {formatDate(e.date)}
+                    <MapPin className="size-3" /> {e.location} · {formatDate(e.event_date)}
                   </p>
                 </div>
               ))}
@@ -117,20 +128,17 @@ export default function StudentDashboardPage() {
           />
         ) : (
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {myProjects.map((p) => {
-              const { percent } = getProjectProgress(p.id);
-              return (
-                <Link
-                  key={p.id}
-                  href={`/student/projects/${p.id}`}
-                  className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40"
-                >
-                  <p className="font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">{p.category}</p>
-                  <h3 className="mt-1 font-display text-sm font-semibold">{p.name}</h3>
-                  <Progress value={percent} className="mt-3 h-1.5" />
-                </Link>
-              );
-            })}
+            {myProjects.map((p) => (
+              <Link
+                key={p.id}
+                href={`/student/projects/${p.id}`}
+                className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40"
+              >
+                <p className="font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">{p.category}</p>
+                <h3 className="mt-1 font-display text-sm font-semibold">{p.name}</h3>
+                <Progress value={progressPercent(taskCounts.get(p.id))} className="mt-3 h-1.5" />
+              </Link>
+            ))}
           </div>
         )}
       </section>
@@ -145,11 +153,17 @@ export default function StudentDashboardPage() {
               View all <ArrowRight className="size-3" />
             </Link>
           </div>
-          <p className="mt-4 text-sm font-medium">{latestAnnouncement.title}</p>
-          <p className="mt-1 text-sm text-muted-foreground">{latestAnnouncement.body}</p>
-          <p className="mt-3 font-mono text-xs text-muted-foreground">
-            {latestAnnouncement.author} · {formatDate(latestAnnouncement.date)}
-          </p>
+          {latestAnnouncement === null ? (
+            <p className="mt-4 text-sm text-muted-foreground">No announcements yet.</p>
+          ) : (
+            <>
+              <p className="mt-4 text-sm font-medium">{latestAnnouncement.title}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{latestAnnouncement.body}</p>
+              <p className="mt-3 font-mono text-xs text-muted-foreground">
+                {latestAnnouncement.authorName} · {formatDate(latestAnnouncement.created_at)}
+              </p>
+            </>
+          )}
         </section>
 
         <section className="rounded-xl border border-border bg-card p-5">
@@ -165,18 +179,15 @@ export default function StudentDashboardPage() {
             </p>
           ) : (
             <div className="mt-4 space-y-3">
-              {achievements.slice(0, 3).map((a) => {
-                const def = BADGE_DEFS.find((b) => b.id === a.badgeId)!;
-                return (
-                  <div key={a.badgeId} className="flex gap-2.5">
-                    <Award className="mt-0.5 size-4 shrink-0 text-primary" strokeWidth={1.75} />
-                    <div>
-                      <p className="text-sm font-medium">{def.name}</p>
-                      <p className="text-xs text-muted-foreground">{a.note ?? formatDate(a.earnedAt)}</p>
-                    </div>
+              {achievements.slice(0, 3).map((a) => (
+                <div key={a.id} className="flex gap-2.5">
+                  <Award className="mt-0.5 size-4 shrink-0 text-primary" strokeWidth={1.75} />
+                  <div>
+                    <p className="text-sm font-medium">{a.badgeName}</p>
+                    <p className="text-xs text-muted-foreground">{a.note ?? formatDate(a.earned_at)}</p>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           )}
         </section>
@@ -204,7 +215,7 @@ export default function StudentDashboardPage() {
                   <p className="mt-0.5 text-xs text-muted-foreground">{c.category} · {c.level}</p>
                 </div>
                 <span className="shrink-0 flex items-center gap-1 font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">
-                  <CalendarDays className="size-3" /> {formatDate(c.date)}
+                  <CalendarDays className="size-3" /> {formatDate(c.event_date)}
                 </span>
               </div>
             ))}

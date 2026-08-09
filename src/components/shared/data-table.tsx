@@ -15,7 +15,7 @@ export type DataTableColumn<T> = {
 };
 
 // A reusable, dependency-light table: client-side search + pagination over
-// an in-memory row set. Sized for the admin/mock-data scale in this app —
+// an in-memory row set. Sized for the club-roster scale in this app —
 // swap for server-side pagination once these lists are backed by real data.
 export function DataTable<T>({
   data,

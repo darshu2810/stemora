@@ -1,54 +1,67 @@
 "use client";
 
-import * as React from "react";
 import Link from "next/link";
 import { ListChecks } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
 import { formatDate } from "@/lib/utils";
-import { mockSchool, mockUsers, tasksForStudent, BOARD_COLUMNS, type OpenTask } from "@/lib/mock-data";
+import { COLUMN_LABELS } from "@/lib/board";
+import type { TaskWithProject } from "@/lib/db/queries";
 
-const COLUMN_LABEL = Object.fromEntries(BOARD_COLUMNS.map((c) => [c.id, c.name]));
+export function MyTasksView({
+  clubName,
+  tasks,
+  basePath,
+}: {
+  clubName: string;
+  tasks: TaskWithProject[];
+  basePath: string;
+}) {
+  const openCount = tasks.filter((t) => t.column_id !== "done").length;
 
-export function MyTasksView({ basePath }: { basePath: string }) {
-  const student = mockUsers.student;
-  const myTasks = React.useMemo(() => tasksForStudent(student.id), [student.id]);
-  const openCount = myTasks.filter((t) => t.column !== "done").length;
-
-  const columns: DataTableColumn<OpenTask>[] = [
+  const columns: DataTableColumn<TaskWithProject>[] = [
     {
       key: "title",
       header: "Task",
       render: (t) => (
-        <Link href={`${basePath}/${t.projectId}`} className="font-medium hover:text-primary hover:underline">
+        <Link href={`${basePath}/${t.project_id}`} className="font-medium hover:text-primary hover:underline">
           {t.title}
         </Link>
       ),
     },
     { key: "project", header: "Project", render: (t) => t.projectName },
-    { key: "column", header: "Status", render: (t) => COLUMN_LABEL[t.column] },
+    { key: "column", header: "Status", render: (t) => COLUMN_LABELS[t.column_id] },
     { key: "priority", header: "Priority", render: (t) => <span className="capitalize">{t.priority}</span> },
-    { key: "dueDate", header: "Due", render: (t) => formatDate(t.dueDate), className: "text-muted-foreground" },
+    {
+      key: "dueDate",
+      header: "Due",
+      render: (t) => (t.due_date ? formatDate(t.due_date) : "—"),
+      className: "text-muted-foreground",
+    },
   ];
 
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow={mockSchool.clubName}
+        eyebrow={clubName}
         title="My Tasks"
-        description={`${openCount} open ${openCount === 1 ? "task" : "tasks"} across your projects.`}
+        description={
+          tasks.length === 0
+            ? "Nothing is assigned to you yet."
+            : `${openCount} open ${openCount === 1 ? "task" : "tasks"} across your projects.`
+        }
       />
 
-      {myTasks.length === 0 ? (
+      {tasks.length === 0 ? (
         <EmptyState
           icon={ListChecks}
-          title="No tasks have been assigned to you yet"
-          description="When a project leader assigns you a task on a project board, it appears here."
+          title="No tasks yet"
+          description="When your School Admin assigns you a task on a project board, it appears here."
         />
       ) : (
         <DataTable
-          data={myTasks}
+          data={tasks}
           columns={columns}
           rowKey={(t) => t.id}
           searchPlaceholder="Search tasks…"
