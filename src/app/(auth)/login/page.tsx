@@ -8,13 +8,23 @@ import { AlertCircle, MailCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { signIn, type AuthResult } from "@/app/(auth)/actions";
+import { signIn, resendConfirmation, type AuthResult } from "@/app/(auth)/actions";
 
 function LoginForm() {
   const params = useSearchParams();
   const next = params.get("next") ?? "";
   const checkEmail = params.get("check_email") === "1";
+  const resent = params.get("resent") === "1";
+  const pendingEmail = params.get("email") ?? "";
   const [state, formAction, pending] = useActionState<AuthResult, FormData>(signIn, undefined);
+  const [resendState, resendAction, resending] = useActionState<AuthResult, FormData>(
+    resendConfirmation,
+    undefined,
+  );
+
+  // Shown while an address is waiting on confirmation, and again if signing in
+  // failed because of it — that is the only way out of an unconfirmed account.
+  const unconfirmed = checkEmail || resent || state?.error?.startsWith("Confirm your email");
 
   return (
     <div className="w-full max-w-sm">
@@ -23,12 +33,38 @@ function LoginForm() {
         Welcome back to your school&apos;s STEM Club.
       </p>
 
-      {checkEmail ? (
-        <div className="mt-6 flex gap-2.5 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
-          <MailCheck className="mt-0.5 size-4 shrink-0 text-primary" />
-          <p className="text-muted-foreground">
-            Check your inbox and confirm your email address, then log in here.
-          </p>
+      {unconfirmed ? (
+        <div className="mt-6 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+          <div className="flex gap-2.5">
+            <MailCheck className="mt-0.5 size-4 shrink-0 text-primary" />
+            <p className="text-muted-foreground">
+              {resent
+                ? "Sent. Open the link in that email to finish setting up your school."
+                : "Check your inbox and confirm your email address, then log in here."}
+            </p>
+          </div>
+          <form action={resendAction} className="mt-3 flex items-end gap-2">
+            <div className="flex-1 space-y-1">
+              <Label htmlFor="resend-email" className="text-xs text-muted-foreground">
+                Didn&apos;t get it?
+              </Label>
+              <Input
+                id="resend-email"
+                name="email"
+                type="email"
+                required
+                defaultValue={pendingEmail}
+                placeholder="you@gmis.sch.id"
+                className="h-8"
+              />
+            </div>
+            <Button type="submit" variant="outline" size="sm" disabled={resending}>
+              {resending ? "Sending…" : "Resend"}
+            </Button>
+          </form>
+          {resendState?.error ? (
+            <p className="mt-2 text-xs text-destructive">{resendState.error}</p>
+          ) : null}
         </div>
       ) : null}
 

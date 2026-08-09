@@ -42,7 +42,16 @@ export async function signIn(_prev: AuthResult, formData: FormData): Promise<Aut
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    // Don't leak whether the address exists.
+    // An unconfirmed address is a different problem from a wrong password, and
+    // telling someone their details are wrong when the real answer is "you
+    // haven't clicked the link yet" sends them back to re-register forever.
+    if (error.code === "email_not_confirmed") {
+      return {
+        error:
+          "Confirm your email address first — open the link we sent you. If it never arrived, request a new one below.",
+      };
+    }
+    // Otherwise don't leak whether the address exists.
     return { error: "That email and password don't match an account." };
   }
 
@@ -81,24 +90,38 @@ export async function registerSchool(_prev: AuthResult, formData: FormData): Pro
   } = await supabase.auth.getUser();
 
   if (!existing) {
-    const { error: signUpError } = await supabase.auth.signUp({
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+    const { data: signUp, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: adminName } },
+      // Without this the confirmation link lands on the project's Site URL
+      // rather than the route that exchanges the token for a session.
+      options: {
+        data: { full_name: adminName },
+        emailRedirectTo: `${siteUrl}/auth/confirm`,
+      },
     });
 
     if (signUpError) {
       return { error: signUpError.message };
     }
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    // Supabase will not admit that an address is already registered: it returns
+    // a user with an empty `identities` array, no error, and no session. Read
+    // literally that looks like a fresh signup, so the form "succeeded", sent
+    // the visitor to /login, and did it again on every retry — the loop.
+    if (signUp.user && signUp.user.identities?.length === 0) {
+      return {
+        error:
+          "An account already exists for that email. Log in instead — or if the confirmation email never arrived, ask for a new one from the login page.",
+      };
+    }
 
-    // Email confirmation is on: there is no session yet, so the school gets
+    // Email confirmation is on, so there is no session yet. The school gets
     // created when they come back through the confirmation link.
-    if (!session) {
-      redirect("/login?check_email=1");
+    if (!signUp.session) {
+      redirect(`/login?check_email=1&email=${encodeURIComponent(email)}`);
     }
   }
 
@@ -112,6 +135,34 @@ export async function registerSchool(_prev: AuthResult, formData: FormData): Pro
 
   revalidatePath("/", "layout");
   redirect("/school/dashboard");
+}
+
+/**
+ * Sends the confirmation email again.
+ *
+ * Needed because re-submitting the registration form cannot do it: a second
+ * signUp for an address that already exists is silently ignored by Supabase, so
+ * without this an account whose first confirmation email never arrived — or
+ * arrived pointing at the wrong origin — has no way to ever be confirmed.
+ */
+export async function resendConfirmation(
+  _prev: AuthResult,
+  formData: FormData,
+): Promise<AuthResult> {
+  const email = String(formData.get("email") ?? "").trim();
+  if (!email) return { error: "Enter your email address first." };
+
+  const supabase = await createClient();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: `${siteUrl}/auth/confirm` },
+  });
+
+  if (error) return { error: error.message };
+  redirect(`/login?resent=1&email=${encodeURIComponent(email)}`);
 }
 
 export async function requestPasswordReset(
