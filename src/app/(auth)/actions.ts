@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { landingForUserWithoutWorkspace } from "@/lib/auth/session";
 
 export type AuthResult = { error: string } | undefined;
@@ -158,8 +159,48 @@ export async function applyForSchool(_prev: AuthResult, formData: FormData): Pro
     };
   }
 
+  // A Platform Owner is the gate here, not the mailbox. If the project is
+  // configured to withhold a session until the address is confirmed, confirm it
+  // server-side and start the session now — the applicant still sees nothing
+  // but their own waitlist entry until a founder approves them.
+  let signedIn = Boolean(signUp.session);
+  if (!signedIn && signUp.user) {
+    signedIn = await confirmAndSignIn(signUp.user.id, email, password);
+  }
+
   revalidatePath("/", "layout");
-  redirect("/waitlist?submitted=1");
+  redirect(signedIn ? "/waitlist" : "/waitlist?submitted=1");
+}
+
+/**
+ * Marks a new applicant's address as confirmed and signs them in.
+ *
+ * Email confirmation proves someone controls an address. Founder approval
+ * decides whether a school joins STEMORA, and it is the stricter test — the
+ * founders review each request by hand. Making an applicant fetch a link before
+ * they can even see their own waitlist entry adds a step and a failure mode
+ * without adding a guarantee.
+ *
+ * Returns false when SUPABASE_SERVICE_ROLE_KEY is absent, in which case the
+ * caller falls back to the emailed confirmation link rather than stranding
+ * anyone.
+ */
+async function confirmAndSignIn(
+  userId: string,
+  email: string,
+  password: string,
+): Promise<boolean> {
+  try {
+    const admin = createAdminClient();
+    const { error } = await admin.auth.admin.updateUserById(userId, { email_confirm: true });
+    if (error) return false;
+
+    const supabase = await createClient();
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    return !signInError;
+  } catch {
+    return false;
+  }
 }
 
 /**
