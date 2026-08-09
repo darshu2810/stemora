@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
   Building2,
+  Inbox,
   Users,
   CalendarDays,
   Settings,
@@ -22,6 +23,7 @@ export type NavItem = { label: string; href: string; icon: LucideIcon };
 // STEMORA staff see the schools on the platform and nothing inside them.
 export const platformNav: NavItem[] = [
   { label: "Schools", href: "/platform/dashboard", icon: Building2 },
+  { label: "School requests", href: "/platform/requests", icon: Inbox },
 ];
 
 // The School Admin manages exactly one STEM Club, so the sidebar is that

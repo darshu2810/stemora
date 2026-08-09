@@ -6,19 +6,20 @@ import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { registerSchool, type AuthResult } from "@/app/(auth)/actions";
+import { applyForSchool, type AuthResult } from "@/app/(auth)/actions";
 
 export default function NewSchoolPage() {
   const [state, formAction, pending] = useActionState<AuthResult, FormData>(
-    registerSchool,
+    applyForSchool,
     undefined,
   );
 
   return (
     <div className="w-full max-w-sm">
-      <h1 className="font-display text-2xl font-semibold tracking-tight">Register your school</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-tight">Apply for STEMORA</h1>
       <p className="mt-1.5 text-sm text-muted-foreground">
-        Creates your school&apos;s workspace and its STEM Club. You&apos;ll be the School Admin.
+        Tell us about your school. The founders review every request before a STEM Club goes live —
+        you&apos;ll go on the waitlist once you submit.
       </p>
 
       <form action={formAction} className="mt-8 space-y-5">
@@ -36,8 +37,19 @@ export default function NewSchoolPage() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="district">District (optional)</Label>
-          <Input id="district" name="district" placeholder="Jakarta Timur" />
+          <Label htmlFor="schoolDomain">School email domain (optional)</Label>
+          <Input id="schoolDomain" name="schoolDomain" placeholder="gmis.sch.id" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="city">City</Label>
+            <Input id="city" name="city" required placeholder="Jakarta" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="country">Country</Label>
+            <Input id="country" name="country" required placeholder="Indonesia" />
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -78,7 +90,7 @@ export default function NewSchoolPage() {
         ) : null}
 
         <Button type="submit" className="w-full" disabled={pending}>
-          {pending ? "Creating your workspace…" : "Create workspace"}
+          {pending ? "Submitting your application…" : "Apply for access"}
         </Button>
       </form>
 

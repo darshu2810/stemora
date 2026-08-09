@@ -6,6 +6,8 @@
 export type UserRoleEnum = "platform_owner" | "school_admin" | "student";
 export type MembershipStatus = "invited" | "active" | "suspended" | "removed";
 export type InvitationStatus = "pending" | "accepted" | "expired" | "revoked";
+/** Where a school's request to join STEMORA has got to. */
+export type ApplicationStatus = "pending" | "approved" | "rejected";
 /** Metadata describing a project's subject area — not an organisational unit. */
 export type ProjectCategory =
   | "Robotics"
@@ -75,6 +77,25 @@ type InvitationRow = {
   invited_by: string;
   expires_at: string;
   accepted_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type SchoolApplicationRow = {
+  id: string;
+  applicant_id: string;
+  applicant_name: string;
+  applicant_email: string;
+  school_name: string;
+  club_name: string;
+  school_email_domain: string | null;
+  city: string | null;
+  country: string | null;
+  status: ApplicationStatus;
+  rejection_reason: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  school_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -280,6 +301,7 @@ export type Database = {
   public: {
     Tables: {
       schools: TableOf<SchoolRow>;
+      school_applications: TableOf<SchoolApplicationRow>;
       users: TableOf<UserRow>;
       school_members: TableOf<SchoolMemberRow>;
       invitations: TableOf<InvitationRow>;
@@ -309,15 +331,27 @@ export type Database = {
         Args: { target_school: string; min_role: UserRoleEnum };
         Returns: boolean;
       };
-      register_school: {
-        Args: { p_name: string; p_district?: string; p_club_name?: string };
+      submit_school_application: {
+        Args: {
+          p_school_name: string;
+          p_club_name?: string;
+          p_school_email_domain?: string;
+          p_city?: string;
+          p_country?: string;
+        };
         Returns: string;
+      };
+      approve_school_application: { Args: { p_application: string }; Returns: string };
+      reject_school_application: {
+        Args: { p_application: string; p_reason?: string };
+        Returns: undefined;
       };
     };
     Enums: {
       user_role: UserRoleEnum;
       membership_status: MembershipStatus;
       invitation_status: InvitationStatus;
+      application_status: ApplicationStatus;
       project_category: ProjectCategory;
       project_status: ProjectStatus;
       task_column: TaskColumn;
@@ -334,6 +368,7 @@ export type Database = {
 
 // Domain aliases used across the app.
 export type School = SchoolRow;
+export type SchoolApplication = SchoolApplicationRow;
 export type AppUser = UserRow;
 export type ActivityLog = ActivityLogRow;
 export type SchoolMember = SchoolMemberRow;

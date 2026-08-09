@@ -8,9 +8,12 @@ const PUBLIC_PATHS = [
   "/features",
   "/contact",
   "/login",
-  // Registration is where an account is created, so it has to be reachable
-  // without one. A signed-in visitor is redirected away below.
+  // Applying is where an account is created, so it has to be reachable without
+  // one. A signed-in visitor is routed onward below.
   "/schools/new",
+  // Terminal: reachable signed in or out, and never redirects onward. This is
+  // what an applicant sees instead of being bounced back to the form.
+  "/waitlist",
   "/forgot-password",
   "/reset-password",
   "/invite",
@@ -60,29 +63,51 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // A signed-in user has no reason to sit on the login page.
-  if (user && (pathname === "/login" || pathname === "/schools/new")) {
-    const { data: membership } = await supabase
-      .from("school_members")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .maybeSingle();
+  // A signed-in user has no reason to sit on the entry pages. Each state below
+  // resolves to exactly one destination, and /waitlist is terminal, so there is
+  // no pair of rules that can hand a visitor back and forth.
+  const ENTRY_PATHS = ["/login", "/schools/new", "/waitlist"];
+  if (user && ENTRY_PATHS.includes(pathname)) {
+    const goTo = (to: string) => {
+      const url = request.nextUrl.clone();
+      url.pathname = to;
+      url.search = "";
+      return NextResponse.redirect(url);
+    };
+
+    const [{ data: profile }, { data: membership }] = await Promise.all([
+      supabase.from("users").select("platform_role").eq("id", user.id).maybeSingle(),
+      supabase
+        .from("school_members")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .maybeSingle(),
+    ]);
+
+    if (profile?.platform_role === "platform_owner") {
+      return pathname === "/platform/dashboard" ? response : goTo("/platform/dashboard");
+    }
 
     if (membership) {
-      const url = request.nextUrl.clone();
-      url.pathname =
-        membership.role === "school_admin" ? "/school/dashboard" : "/student/dashboard";
-      url.search = "";
-      return NextResponse.redirect(url);
+      return goTo(membership.role === "school_admin" ? "/school/dashboard" : "/student/dashboard");
     }
-    // No membership yet: /schools/new is exactly where they should be.
-    if (pathname === "/login") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/schools/new";
-      url.search = "";
-      return NextResponse.redirect(url);
-    }
+
+    // No workspace. Whether they are waiting, refused, or have yet to apply is
+    // the application's business, not the login page's.
+    const { data: application } = await supabase
+      .from("school_applications")
+      .select("status")
+      .eq("applicant_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const waiting = application && application.status !== "approved";
+
+    if (waiting) return pathname === "/waitlist" ? response : goTo("/waitlist");
+    // Never applied: the form is the only place that helps.
+    if (pathname !== "/schools/new") return goTo("/schools/new");
   }
 
   return response;

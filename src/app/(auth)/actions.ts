@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { landingForUserWithoutWorkspace } from "@/lib/auth/session";
 
 export type AuthResult = { error: string } | undefined;
 
@@ -28,9 +29,11 @@ async function destinationFor(userId: string): Promise<string> {
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (!membership) return "/schools/new";
-  if (membership.status !== "active") return "/no-access";
-  return membership.role === "school_admin" ? "/school/dashboard" : "/student/dashboard";
+  if (membership?.status === "active") {
+    return membership.role === "school_admin" ? "/school/dashboard" : "/student/dashboard";
+  }
+
+  return landingForUserWithoutWorkspace(userId);
 }
 
 export async function signIn(_prev: AuthResult, formData: FormData): Promise<AuthResult> {
@@ -63,78 +66,100 @@ export async function signIn(_prev: AuthResult, formData: FormData): Promise<Aut
   if (user) {
     const home = await destinationFor(user.id);
     // A `next` from the login redirect is only honoured for someone who has a
-    // workspace to go back to.
-    destination = home === "/no-access" || home === "/schools/new" ? home : next || home;
+    // workspace to go back to. Anyone waiting, refused, or yet to apply goes
+    // to the page that explains their position, whatever they were aiming at.
+    const terminal = ["/no-access", "/waitlist", "/schools/new"];
+    destination = terminal.includes(home) ? home : next || home;
   }
 
   revalidatePath("/", "layout");
   redirect(destination);
 }
 
-export async function registerSchool(_prev: AuthResult, formData: FormData): Promise<AuthResult> {
+/**
+ * Applies to bring a school onto STEMORA.
+ *
+ * This creates a request, not a workspace. No school row, no membership, no
+ * School Admin — those exist only once a Platform Owner approves. Confirming
+ * the email address is a separate, purely security concern and does not move
+ * the application along.
+ */
+export async function applyForSchool(_prev: AuthResult, formData: FormData): Promise<AuthResult> {
   const schoolName = String(formData.get("schoolName") ?? "").trim();
   const clubName = String(formData.get("clubName") ?? "").trim() || "STEM Club";
-  const district = String(formData.get("district") ?? "").trim();
+  const schoolDomain = String(formData.get("schoolDomain") ?? "").trim();
+  const city = String(formData.get("city") ?? "").trim();
+  const country = String(formData.get("country") ?? "").trim();
   const adminName = String(formData.get("adminName") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
-  if (password.length < 8) return { error: "Choose a password of at least 8 characters." };
+  if (!schoolName) return { error: "Enter your school's name." };
 
   const supabase = await createClient();
 
-  // Already signed in but school-less (e.g. came back after confirming email):
-  // skip straight to creating the school.
+  // An account that already exists and belongs to nothing — someone who
+  // confirmed their address before applying, or who signed up earlier. Lodge
+  // the request against that account rather than trying to sign up again.
   const {
     data: { user: existing },
   } = await supabase.auth.getUser();
 
-  if (!existing) {
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-
-    const { data: signUp, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      // Without this the confirmation link lands on the project's Site URL
-      // rather than the route that exchanges the token for a session.
-      options: {
-        data: { full_name: adminName },
-        emailRedirectTo: `${siteUrl}/auth/confirm`,
-      },
+  if (existing) {
+    const { error } = await supabase.rpc("submit_school_application", {
+      p_school_name: schoolName,
+      p_club_name: clubName,
+      p_school_email_domain: schoolDomain || undefined,
+      p_city: city || undefined,
+      p_country: country || undefined,
     });
 
-    if (signUpError) {
-      return { error: signUpError.message };
-    }
+    if (error) return { error: error.message };
 
-    // Supabase will not admit that an address is already registered: it returns
-    // a user with an empty `identities` array, no error, and no session. Read
-    // literally that looks like a fresh signup, so the form "succeeded", sent
-    // the visitor to /login, and did it again on every retry — the loop.
-    if (signUp.user && signUp.user.identities?.length === 0) {
-      return {
-        error:
-          "An account already exists for that email. Log in instead — or if the confirmation email never arrived, ask for a new one from the login page.",
-      };
-    }
-
-    // Email confirmation is on, so there is no session yet. The school gets
-    // created when they come back through the confirmation link.
-    if (!signUp.session) {
-      redirect(`/login?check_email=1&email=${encodeURIComponent(email)}`);
-    }
+    revalidatePath("/", "layout");
+    redirect("/waitlist");
   }
 
-  const { error } = await supabase.rpc("register_school", {
-    p_name: schoolName,
-    p_district: district || undefined,
-    p_club_name: clubName,
+  if (password.length < 8) return { error: "Choose a password of at least 8 characters." };
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+  // The school details ride along as user metadata; the on-signup trigger
+  // reads them and records the application, so the request exists even though
+  // there is no session yet.
+  const { data: signUp, error: signUpError } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: adminName,
+        school_name: schoolName,
+        club_name: clubName,
+        school_email_domain: schoolDomain,
+        city,
+        country,
+      },
+      // Without this the confirmation link resolves against the project's Site
+      // URL rather than the route that exchanges the token for a session.
+      emailRedirectTo: `${siteUrl}/auth/confirm`,
+    },
   });
 
-  if (error) return { error: error.message };
+  if (signUpError) return { error: signUpError.message };
+
+  // Supabase will not admit that an address is already registered: it returns
+  // a user with an empty `identities` array, no error, and no session. Read
+  // literally that looks like a fresh signup — which is what made the old form
+  // "succeed" on every retry and bounce the visitor round forever.
+  if (signUp.user && signUp.user.identities?.length === 0) {
+    return {
+      error:
+        "An account already exists for that email. Log in instead — or if the confirmation email never arrived, ask for a new one from the login page.",
+    };
+  }
 
   revalidatePath("/", "layout");
-  redirect("/school/dashboard");
+  redirect("/waitlist?submitted=1");
 }
 
 /**

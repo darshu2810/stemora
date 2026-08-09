@@ -23,6 +23,46 @@ function str(fd: FormData, key: string) {
   return String(fd.get(key) ?? "").trim();
 }
 
+// --- School applications ----------------------------------------------------
+//
+// Approval is the only route to school_admin. Both actions go through
+// SECURITY DEFINER functions that re-check `is_platform_owner()` in the
+// database, so the role check here is a courtesy to the UI, not the boundary.
+
+export async function approveApplication(
+  _prev: ActionResult | undefined,
+  fd: FormData,
+): Promise<ActionResult> {
+  await requireSession("platform_owner");
+  const supabase = await createClient();
+
+  const { error } = await supabase.rpc("approve_school_application", {
+    p_application: str(fd, "applicationId"),
+  });
+
+  if (error) return fail(error.message);
+  revalidatePath("/platform/requests");
+  revalidatePath("/platform/dashboard");
+  return ok;
+}
+
+export async function rejectApplication(
+  _prev: ActionResult | undefined,
+  fd: FormData,
+): Promise<ActionResult> {
+  await requireSession("platform_owner");
+  const supabase = await createClient();
+
+  const { error } = await supabase.rpc("reject_school_application", {
+    p_application: str(fd, "applicationId"),
+    p_reason: str(fd, "reason") || undefined,
+  });
+
+  if (error) return fail(error.message);
+  revalidatePath("/platform/requests");
+  return ok;
+}
+
 // --- Access -----------------------------------------------------------------
 //
 // Who can sign in to this school is the School Admin's decision, made here.

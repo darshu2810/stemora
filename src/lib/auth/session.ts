@@ -3,6 +3,7 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/config/roles";
+import type { ApplicationStatus } from "@/lib/supabase/types";
 
 export type Session = {
   userId: string;
@@ -80,6 +81,38 @@ export async function getSession(): Promise<Session | null> {
   };
 }
 
+/** A signed-in applicant's standing, for the waitlist page and for routing. */
+export type ApplicationStanding = {
+  status: ApplicationStatus;
+  schoolName: string;
+  rejectionReason: string | null;
+  submittedAt: string;
+};
+
+/**
+ * The most recent request this account has made to bring a school onto
+ * STEMORA, or null if it has never made one. Confirming an email address does
+ * not touch this: approval is the founders' decision, and nothing else.
+ */
+export async function applicationFor(userId: string): Promise<ApplicationStanding | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("school_applications")
+    .select("status, school_name, rejection_reason, created_at")
+    .eq("applicant_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!data) return null;
+  return {
+    status: data.status,
+    schoolName: data.school_name,
+    rejectionReason: data.rejection_reason,
+    submittedAt: data.created_at,
+  };
+}
+
 /**
  * Why a signed-in user has no workspace: they belong to no school, or their
  * School Admin has closed their access.
@@ -114,10 +147,7 @@ export async function requireSession(role?: UserRole): Promise<Session> {
     const supabase = await createClient();
     const { data: auth } = await supabase.auth.getUser();
     if (auth.user) {
-      // Signed in, but the school is closed to them — say so, rather than
-      // offering to register a school they never asked for.
-      const blocked = await getBlockedReason(auth.user.id);
-      redirect(blocked ? "/no-access" : "/schools/new");
+      redirect(await landingForUserWithoutWorkspace(auth.user.id));
     }
     redirect("/login");
   }
@@ -127,6 +157,27 @@ export async function requireSession(role?: UserRole): Promise<Session> {
   }
 
   return session;
+}
+
+/**
+ * Where a signed-in account with no active membership belongs. Every caller
+ * routes through this, which is what stops the old bounce between /login and
+ * /schools/new: each state has exactly one destination, and /waitlist and
+ * /no-access are both terminal.
+ */
+export async function landingForUserWithoutWorkspace(userId: string): Promise<string> {
+  // Access a School Admin paused or closed: say so, rather than offering a
+  // registration form they never asked for.
+  const blocked = await getBlockedReason(userId);
+  if (blocked) return "/no-access";
+
+  // Waiting on the founders, or turned down: both are terminal pages that
+  // explain the position and never redirect onward.
+  const application = await applicationFor(userId);
+  if (application && application.status !== "approved") return "/waitlist";
+
+  // Never applied. The form is the right place.
+  return "/schools/new";
 }
 
 export function dashboardFor(role: UserRole): string {

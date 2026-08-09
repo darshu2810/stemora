@@ -10,6 +10,7 @@ import type {
   Project,
   ProjectTask,
   Resource,
+  SchoolApplication,
   StemEvent,
   StudentAchievement,
   StudentCertificate,
@@ -352,6 +353,20 @@ export async function listAnnouncements(schoolId: string): Promise<AnnouncementW
 }
 
 // --- Platform ---------------------------------------------------------------
+
+/**
+ * Every request to bring a school onto STEMORA. RLS restricts this to Platform
+ * Owners; an applicant reading the same table sees only their own row.
+ */
+export async function listSchoolApplications(): Promise<SchoolApplication[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("school_applications")
+    .select("*")
+    .order("created_at", { ascending: false });
+  return data ?? [];
+}
+
 
 /**
  * A school as the Platform Owner sees it. Deliberately shallow: RLS lets a
