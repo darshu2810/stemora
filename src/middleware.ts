@@ -8,6 +8,9 @@ const PUBLIC_PATHS = [
   "/features",
   "/contact",
   "/login",
+  // Registration is where an account is created, so it has to be reachable
+  // without one. A signed-in visitor is redirected away below.
+  "/schools/new",
   "/forgot-password",
   "/reset-password",
   "/invite",
