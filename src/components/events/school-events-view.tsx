@@ -17,7 +17,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { formatDate } from "@/lib/utils";
-import { EVENT_TYPES, keepsAttendance } from "@/lib/events";
+import { EVENT_TYPES, eventTitle, keepsAttendance } from "@/lib/events";
 import { createEvent, cancelEvent } from "@/lib/db/actions";
 import type { StemEvent, EventType } from "@/lib/supabase/types";
 
@@ -92,12 +92,12 @@ export function SchoolEventsView({
                   <Input
                     id="title"
                     name="title"
-                    required={!isSession}
+                    required
                     placeholder={isSession ? "Robotics — building line-following robots" : "Regional science fair"}
                   />
-                  {isSession ? (
+                  {isSession && nextSessionNumber ? (
                     <p className="text-xs text-muted-foreground">
-                      Optional. Add it later if the topic isn&apos;t decided yet.
+                      Shown as “Session {nextSessionNumber} — your topic”.
                     </p>
                   ) : null}
                 </div>
@@ -191,12 +191,12 @@ function EventRow({ event, canManage }: { event: StemEvent; canManage: boolean }
                 : "inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 font-mono text-[0.65rem] font-medium uppercase tracking-wider text-secondary-foreground"
             }
           >
-            {isSession ? `Session ${event.session_number}` : event.type}
+            {event.type}
           </span>
 
-          <h3 className="mt-1.5 font-display font-semibold">
-            {isSession ? event.title || `Session ${event.session_number}` : event.title}
-          </h3>
+          {/* "Session 21 — Robotics": the number from the database, the topic
+              from the club head, composed in one place. */}
+          <h3 className="mt-1.5 font-display font-semibold">{eventTitle(event)}</h3>
 
           {event.description ? (
             <p className="mt-1 text-sm text-muted-foreground">{event.description}</p>

@@ -649,9 +649,11 @@ export async function createEvent(_prev: ActionResult | undefined, fd: FormData)
   const location = str(fd, "location");
 
   if (!date || !time || !location) return fail("Date, time, and location are all needed.");
-  // A session is identified by its number, so it can be scheduled before the
-  // topic is decided. Everything else needs a name to be recognisable.
-  if (type !== "Session" && !title) return fail("Give the event a title.");
+  // The number says when the club met; the topic says what it did. A session
+  // needs both, so neither is optional.
+  if (!title) {
+    return fail(type === "Session" ? "Give the session a topic." : "Give the event a title.");
+  }
 
   const { error } = await supabase.rpc("create_club_event", {
     p_type: type,

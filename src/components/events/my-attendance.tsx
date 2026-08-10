@@ -1,7 +1,7 @@
 import { ClipboardCheck } from "lucide-react";
 import { StatusBadge, type StatusKind } from "@/components/shared/status-badge";
 import { formatDate } from "@/lib/utils";
-import { ATTENDANCE_LABELS, countsAsPresent } from "@/lib/events";
+import { ATTENDANCE_LABELS, countsAsPresent, sessionLabel } from "@/lib/events";
 import type { OwnAttendance } from "@/lib/db/queries";
 import type { AttendanceStatus } from "@/lib/supabase/types";
 
@@ -43,7 +43,7 @@ export function MyAttendance({ records }: { records: OwnAttendance[] }) {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">
-                  {r.topic || `Session ${r.sessionNumber}`}
+                  {sessionLabel(r.sessionNumber, r.topic)}
                 </p>
                 <p className="text-xs text-muted-foreground">{formatDate(r.date)}</p>
               </div>

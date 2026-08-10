@@ -67,8 +67,8 @@ export function AttendanceSheet({ session }: { session: SessionDetail }) {
           <Link href="/school/events"><ArrowLeft className="size-4" /> All events</Link>
         } />
         <PageHeader
-          eyebrow={`Session ${session.sessionNumber}`}
-          title={session.topic || `Session ${session.sessionNumber}`}
+          eyebrow="Session"
+          title={sessionLabel(session.sessionNumber, session.topic)}
           description={session.description ?? "Mark who came, then save. You can change it later."}
         />
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">

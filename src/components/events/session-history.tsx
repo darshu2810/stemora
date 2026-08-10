@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ClipboardCheck } from "lucide-react";
 import { formatDate } from "@/lib/utils";
+import { sessionLabel } from "@/lib/events";
 import type { SessionSummary } from "@/lib/db/queries";
 
 /**
@@ -34,7 +35,7 @@ export function SessionHistory({ sessions }: { sessions: SessionSummary[] }) {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">
-                  {s.topic || `Session ${s.sessionNumber}`}
+                  {sessionLabel(s.sessionNumber, s.topic)}
                 </p>
                 <p className="text-xs text-muted-foreground">{formatDate(s.date)}</p>
               </div>
