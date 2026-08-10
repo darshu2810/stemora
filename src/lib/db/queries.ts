@@ -119,11 +119,18 @@ export type AccessRow = {
   expiresAt: string | null;
 };
 
+/** School Admins first, then students; oldest member first within each. */
+const ROLE_ORDER: Record<string, number> = { school_admin: 0, student: 1 };
+
 /**
  * Everyone with any standing at the school — active, invited, suspended, or
  * removed — in one list. This is the roster the School Admin governs, so it
  * deliberately hides nothing: a person who cannot sign in still appears, with
  * the reason why.
+ *
+ * Ordered with the people who run the club at the top, because that is the
+ * question the page is most often opened to answer. The order is settled here
+ * rather than in the table so every screen reading this list agrees.
  */
 export async function listAccess(schoolId: string): Promise<AccessRow[]> {
   const supabase = await createClient();
@@ -159,7 +166,11 @@ export async function listAccess(schoolId: string): Promise<AccessRow[]> {
       invitationId: invitation?.id ?? null,
       expiresAt: invitation?.expires_at ?? null,
     };
-  });
+  })
+    .sort((a, b) => {
+      const byRole = (ROLE_ORDER[a.role] ?? 99) - (ROLE_ORDER[b.role] ?? 99);
+      return byRole !== 0 ? byRole : a.joinedAt.localeCompare(b.joinedAt);
+    });
 }
 
 /** A current School Admin, for the succession panel. */
