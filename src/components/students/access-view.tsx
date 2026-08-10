@@ -13,6 +13,7 @@ import {
   Trash2,
   TriangleAlert,
   UserRoundPlus,
+  LogOut,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
@@ -54,13 +55,16 @@ import { formatDate, initialsOf } from "@/lib/utils";
 import type { AccessRow } from "@/lib/db/queries";
 import {
   decideJoinRequest,
+  demoteSchoolAdmin,
   inviteStudent,
+  promoteToSchoolAdmin,
   resendInvitation,
   revokeInvitation,
-  setMemberRole,
   setMemberStatus,
+  stepDownAsSchoolAdmin,
   type ActionResult,
 } from "@/lib/db/actions";
+import type { SchoolAdminRow } from "@/lib/db/queries";
 import type { MembershipStatus } from "@/lib/supabase/types";
 
 const GRADES = [8, 9, 10, 11, 12] as const;
@@ -149,14 +153,125 @@ function ConfirmAction({
   );
 }
 
+/**
+ * Who runs the club, and the controls that hand it on.
+ *
+ * A STEM Club's leadership graduates. This panel exists so passing it on is an
+ * ordinary thing a club head does from their own roster, rather than something
+ * that needs the founders — and so the last one standing is told plainly why
+ * they cannot leave yet.
+ */
+function AdminsPanel({
+  admins,
+  currentUserId,
+  onManage,
+}: {
+  admins: SchoolAdminRow[];
+  currentUserId: string;
+  onManage: (userId: string) => void;
+}) {
+  const isLastAdmin = admins.length < 2;
+  const [stepDownOpen, setStepDownOpen] = React.useState(false);
+
+  return (
+    <section className="rounded-xl border border-border bg-card p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-medium">
+            <ShieldCheck className="size-4 text-primary" />
+            School Admins
+          </h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Everyone who can manage this STEM Club. Appoint a student before you graduate and the
+            club carries on without us.
+          </p>
+        </div>
+
+        <AlertDialog open={stepDownOpen} onOpenChange={setStepDownOpen}>
+          <AlertDialogTrigger
+            render={
+              <Button variant="outline" size="sm">
+                <LogOut className="size-4" /> Step Down
+              </Button>
+            }
+          />
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Step down as School Admin?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {isLastAdmin
+                  ? "You are the last School Admin. Appoint another School Admin before stepping down."
+                  : "You'll become an ordinary member of the club. Your account, your projects, your tasks and your achievements all stay exactly as they are — you just stop managing the club. Another School Admin can appoint you again later."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {isLastAdmin ? (
+              <AlertDialogFooter>
+                <AlertDialogCancel>Close</AlertDialogCancel>
+              </AlertDialogFooter>
+            ) : (
+              <ActionForm action={stepDownAsSchoolAdmin} onSuccess={() => setStepDownOpen(false)}>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <SubmitButton pendingLabel="Stepping down…" variant="destructive">
+                    Step down
+                  </SubmitButton>
+                </AlertDialogFooter>
+              </ActionForm>
+            )}
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+
+      <ul className="mt-4 divide-y divide-border border-t border-border">
+        {admins.map((a) => (
+          <li key={a.userId} className="flex flex-wrap items-center gap-3 py-2.5">
+            <Avatar className="size-7">
+              <AvatarFallback className="bg-primary/10 text-[0.65rem] font-medium text-primary">
+                {initialsOf(a.name)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">
+                {a.name}
+                {a.userId === currentUserId ? (
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">you</span>
+                ) : null}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">{a.email}</p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {a.adminSince ? `Admin since ${formatDate(a.adminSince)}` : "Since the club started"}
+            </p>
+            {a.userId === currentUserId ? null : (
+              <Button variant="ghost" size="sm" onClick={() => onManage(a.userId)}>
+                Manage
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      {isLastAdmin ? (
+        <p className="mt-3 flex items-start gap-2 text-xs text-muted-foreground">
+          <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+          You are the only School Admin. A club must always have at least one, so appoint another
+          before stepping down or closing your own access.
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 export function AccessView({
   clubName,
   people,
+  admins,
   currentUserId,
   canSendEmail,
 }: {
   clubName: string;
   people: AccessRow[];
+  admins: SchoolAdminRow[];
   currentUserId: string;
   canSendEmail: boolean;
 }) {
@@ -285,6 +400,8 @@ export function AccessView({
           </div>
         </div>
       )}
+
+      <AdminsPanel admins={admins} currentUserId={currentUserId} onManage={setSelectedId} />
 
       {counts.pending > 0 ? (
         <button
@@ -512,21 +629,21 @@ function AccessControls({ person, onDone }: { person: AccessRow; onDone: () => v
           label="Withdraw School Admin"
           icon={Users}
           title={`Make ${name} a Student?`}
-          description="They keep their access but lose the ability to manage the club."
+          description="They keep their access and everything they've made, but stop managing the club. A school must always keep at least one School Admin, so this is refused if they are the last one."
           confirmLabel="Make Student"
-          action={setMemberRole}
-          fields={{ userId, role: "student" }}
+          action={demoteSchoolAdmin}
+          fields={{ userId }}
           onDone={onDone}
         />
       ) : (
         <ConfirmAction
           label="Make School Admin"
           icon={ShieldCheck}
-          title={`Give ${name} School Admin access?`}
-          description="They'll be able to manage students, projects, and everything else in this school — including your access."
+          title={`Make ${name} a School Admin?`}
+          description="This gives them management access to the STEM Club: students, projects, competitions, events, resources and announcements — including your own access. They keep the same account and stay in this school."
           confirmLabel="Make School Admin"
-          action={setMemberRole}
-          fields={{ userId, role: "school_admin" }}
+          action={promoteToSchoolAdmin}
+          fields={{ userId }}
           onDone={onDone}
         />
       )}

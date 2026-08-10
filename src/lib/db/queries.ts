@@ -161,6 +161,63 @@ export async function listAccess(schoolId: string): Promise<AccessRow[]> {
   });
 }
 
+/** A current School Admin, for the succession panel. */
+export type SchoolAdminRow = {
+  userId: string;
+  name: string;
+  email: string;
+  /** When they were appointed, or null for the admin the school started with. */
+  adminSince: string | null;
+  joinedAt: string;
+};
+
+/**
+ * Who currently runs the club, and since when.
+ *
+ * "Since when" comes from the audit trail rather than the membership row,
+ * because `joined_at` records when they joined the school, not when they took
+ * the role. The School Admin created by the founders' approval has no promotion
+ * entry, so theirs is null and the page says "since the club started" instead
+ * of inventing a date.
+ */
+export async function listSchoolAdmins(schoolId: string): Promise<SchoolAdminRow[]> {
+  const supabase = await createClient();
+
+  const [{ data: members }, { data: promotions }] = await Promise.all([
+    supabase
+      .from("school_members")
+      .select("user_id, joined_at, users(id, full_name, email)")
+      .eq("school_id", schoolId)
+      .eq("role", "school_admin")
+      .eq("status", "active")
+      .order("joined_at", { ascending: true }),
+    supabase
+      .from("activity_logs")
+      .select("entity_id, created_at")
+      .eq("school_id", schoolId)
+      .eq("action", "school_admin_promoted")
+      .order("created_at", { ascending: false }),
+  ]);
+
+  // Most recent promotion wins: someone can be appointed, step down, and be
+  // appointed again, and the panel should show the current tenure.
+  const promotedAt = new Map<string, string>();
+  for (const p of promotions ?? []) {
+    if (p.entity_id && !promotedAt.has(p.entity_id)) promotedAt.set(p.entity_id, p.created_at);
+  }
+
+  return (members ?? []).map((row) => {
+    const u = row.users as unknown as { id: string; full_name: string; email: string };
+    return {
+      userId: u.id,
+      name: u.full_name,
+      email: u.email,
+      adminSince: promotedAt.get(u.id) ?? null,
+      joinedAt: row.joined_at,
+    };
+  });
+}
+
 // --- Projects ---------------------------------------------------------------
 
 export async function listProjects(schoolId: string): Promise<ProjectWithTeam[]> {

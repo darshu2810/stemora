@@ -74,6 +74,42 @@ write one. Anything else becomes `pending`, whatever the metadata claims. A
 `school_id` posted straight at the Supabase signup endpoint therefore yields a
 request, not access.
 
+## School Admin succession
+
+A STEM Club outlives the students running it, so leadership passes from one
+cohort to the next without a Founder in the loop. Three operations, all decided
+in the database:
+
+| Function | Who may call it | Effect |
+|---|---|---|
+| `promote_to_school_admin(user)` | an active School Admin | an active student in **their own school** becomes `school_admin` |
+| `demote_school_admin(user)` | an active School Admin | another admin returns to `student` |
+| `step_down_as_school_admin()` | an active School Admin | gives up their own role |
+
+Each function re-derives the acting admin's school from **their own membership**
+rather than trusting an argument, so no shape of call reaches another school.
+Nothing else moves: the same account, the same membership row, the same school.
+Projects, tasks, achievements and profile are untouched — a former admin simply
+carries on as a member of the club.
+
+`protect_last_school_admin` is the floor. A school can never reach zero active
+admins: the last one cannot step down, be demoted, be suspended, be removed, or
+be deleted. The functions check first so the club head gets a sentence telling
+them what to do instead ("Appoint another School Admin before stepping down"),
+and the trigger refuses regardless if anything gets past that.
+
+Founder approval creates a school's *first* School Admin and is not needed
+again — succession after that is the club's own business.
+
+### Audit trail
+
+`activity_logs` records `school_admin_promoted`, `school_admin_demoted`, and
+`school_admin_stepped_down` with the acting user, the affected user, the school,
+the timestamp, and the roles moved between. It is **append-only**: rows are
+written only inside the functions above, which run as the owner. No client role
+holds `INSERT`, `UPDATE`, `DELETE`, or `TRUNCATE` on the table, and the only
+policy is a `SELECT` for members of that school.
+
 ## Membership states
 
 ```

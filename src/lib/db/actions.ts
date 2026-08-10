@@ -333,44 +333,70 @@ export async function setMemberStatus(_prev: ActionResult | undefined, fd: FormD
   return ok;
 }
 
-/**
- * Grants or withdraws School Admin. A school can never end up with none: the
- * database refuses to demote the last one, so this cannot lock anybody out.
- */
-export async function setMemberRole(_prev: ActionResult | undefined, fd: FormData): Promise<ActionResult> {
-  const session = await requireSchoolAdmin();
-  const userId = str(fd, "userId");
-  const role = str(fd, "role");
+// --- School Admin succession ------------------------------------------------
+//
+// A STEM Club outlives the students running it, so leadership has to pass from
+// one cohort to the next without a founder in the loop. All three operations
+// go through SECURITY DEFINER functions that re-derive the acting admin's
+// school from their own membership rather than trusting an argument, so there
+// is no shape of call that reaches another school. The role check here is a
+// courtesy to the UI, not the boundary — and the database refuses to leave a
+// school with no admin at all.
 
-  if (role !== "school_admin" && role !== "student") {
-    return fail("That is not a role.");
-  }
-  if (userId === session.userId) {
-    return fail("You can't change your own role. Another School Admin can do it for you.");
-  }
+/** Revalidates every surface that names who runs the club. */
+function revalidateSuccession() {
+  revalidatePath("/school/students");
+  revalidatePath("/school/dashboard");
+  revalidatePath("/", "layout");
+}
+
+/** Appoints an active student as a School Admin alongside the current ones. */
+export async function promoteToSchoolAdmin(
+  _prev: ActionResult | undefined,
+  fd: FormData,
+): Promise<ActionResult> {
+  await requireSchoolAdmin();
+  const userId = str(fd, "userId");
+  if (!userId) return fail("Choose a student to appoint.");
 
   const supabase = await createClient();
-  const { data: member } = await supabase
-    .from("school_members")
-    .select("status")
-    .eq("school_id", session.schoolId)
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (!member) return fail("That person is no longer on the list.");
-  if (member.status !== "active") {
-    return fail("Only someone with active access can be given a role.");
-  }
-
-  const { error } = await supabase
-    .from("school_members")
-    .update({ role })
-    .eq("school_id", session.schoolId)
-    .eq("user_id", userId);
+  const { error } = await supabase.rpc("promote_to_school_admin", { p_user: userId });
 
   if (error) return fail(error.message);
+  revalidateSuccession();
+  return ok;
+}
 
-  revalidatePath("/school/students");
+/** Withdraws School Admin from someone else, leaving them an ordinary member. */
+export async function demoteSchoolAdmin(
+  _prev: ActionResult | undefined,
+  fd: FormData,
+): Promise<ActionResult> {
+  await requireSchoolAdmin();
+  const userId = str(fd, "userId");
+  if (!userId) return fail("Choose a School Admin.");
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("demote_school_admin", { p_user: userId });
+
+  if (error) return fail(error.message);
+  revalidateSuccession();
+  return ok;
+}
+
+/**
+ * Gives up your own School Admin role. Nothing else changes: the account, the
+ * membership, the school, and every project, task and achievement stay exactly
+ * where they were — you carry on as a member of the club.
+ */
+export async function stepDownAsSchoolAdmin(): Promise<ActionResult> {
+  await requireSchoolAdmin();
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("step_down_as_school_admin");
+
+  if (error) return fail(error.message);
+  revalidateSuccession();
   return ok;
 }
 

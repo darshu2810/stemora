@@ -349,6 +349,9 @@ export type Database = {
         };
         Returns: string;
       };
+      promote_to_school_admin: { Args: { p_user: string }; Returns: undefined };
+      demote_school_admin: { Args: { p_user: string }; Returns: undefined };
+      step_down_as_school_admin: { Args: Record<never, never>; Returns: undefined };
       approve_school_application: { Args: { p_application: string }; Returns: string };
       reject_school_application: {
         Args: { p_application: string; p_reason?: string };
