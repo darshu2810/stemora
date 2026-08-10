@@ -655,6 +655,14 @@ export async function createEvent(_prev: ActionResult | undefined, fd: FormData)
     return fail(type === "Session" ? "Give the session a topic." : "Give the event a title.");
   }
 
+  // The number is a suggestion the admin may overrule — sessions get created
+  // by accident, and the count has to be able to go back.
+  const chosen = str(fd, "sessionNumber");
+  const sessionNumber = type === "Session" && chosen ? Number(chosen) : null;
+  if (sessionNumber !== null && (!Number.isInteger(sessionNumber) || sessionNumber < 1)) {
+    return fail("A session number has to be a whole number, 1 or more.");
+  }
+
   const { error } = await supabase.rpc("create_club_event", {
     p_type: type,
     p_title: title,
@@ -663,11 +671,43 @@ export async function createEvent(_prev: ActionResult | undefined, fd: FormData)
     p_location: location,
     p_end_time: str(fd, "endTime") || null,
     p_description: str(fd, "description") || null,
+    p_session_number: sessionNumber,
   });
 
   if (error) return fail(error.message);
   revalidatePath("/school/events");
   revalidatePath("/school/dashboard");
+  return ok;
+}
+
+/**
+ * Renumbers a session. The sequence then carries on from the new number, so
+ * putting a mistaken Session 7 back to 3 makes the next one 4.
+ */
+export async function renumberSession(
+  _prev: ActionResult | undefined,
+  fd: FormData,
+): Promise<ActionResult> {
+  await requireSchoolAdmin();
+  const eventId = str(fd, "eventId");
+  const raw = str(fd, "sessionNumber");
+  const next = Number(raw);
+
+  if (!eventId) return fail("That session is no longer on the calendar.");
+  if (!raw || !Number.isInteger(next) || next < 1) {
+    return fail("A session number has to be a whole number, 1 or more.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_session_number", {
+    p_event: eventId,
+    p_number: next,
+  });
+
+  if (error) return fail(error.message);
+  revalidatePath("/school/events");
+  revalidatePath(`/school/events/${eventId}`);
+  revalidatePath("/student/events");
   return ok;
 }
 

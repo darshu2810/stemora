@@ -2,16 +2,21 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, CheckCheck, Clock, MapPin, Users } from "lucide-react";
+import { ArrowLeft, CalendarDays, CheckCheck, Clock, Hash, MapPin, Users } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatCard } from "@/components/shared/stat-card";
 import { ActionForm, SubmitButton } from "@/components/shared/action-form";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
 import { formatDate, initialsOf } from "@/lib/utils";
 import { countsAsPresent, sessionLabel } from "@/lib/events";
-import { saveAttendance } from "@/lib/db/actions";
+import { renumberSession, saveAttendance } from "@/lib/db/actions";
 import type { SessionDetail } from "@/lib/db/queries";
 import type { AttendanceStatus } from "@/lib/supabase/types";
 
@@ -70,6 +75,7 @@ export function AttendanceSheet({ session }: { session: SessionDetail }) {
           eyebrow="Session"
           title={sessionLabel(session.sessionNumber, session.topic)}
           description={session.description ?? "Mark who came, then save. You can change it later."}
+          actions={<RenumberSession session={session} />}
         />
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <span className="flex items-center gap-1"><CalendarDays className="size-3" /> {formatDate(session.date)}</span>
@@ -158,5 +164,55 @@ export function AttendanceSheet({ session }: { session: SessionDetail }) {
   );
 }
 
-/** Used by the events page header when a session has no topic yet. */
-export { sessionLabel };
+/**
+ * Correcting a session's number after the fact, for when a few were created by
+ * mistake. Whatever is set here is where the sequence carries on from, so the
+ * count can go back as well as forward. The database still refuses a number
+ * another session already holds.
+ */
+function RenumberSession({ session }: { session: SessionDetail }) {
+  const [open, setOpen] = React.useState(false);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={
+        <Button variant="outline" size="sm"><Hash className="size-4" /> Change number</Button>
+      } />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Change the session number</DialogTitle>
+          <DialogDescription>
+            This is Session {session.sessionNumber}. Set it to whatever it should be — the next
+            session your club creates will carry on from here.
+          </DialogDescription>
+        </DialogHeader>
+        <ActionForm action={renumberSession} onSuccess={() => setOpen(false)}>
+          <input type="hidden" name="eventId" value={session.id} />
+          <div className="space-y-2">
+            <Label htmlFor="sessionNumber">Session number</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Session</span>
+              <Input
+                id="sessionNumber"
+                name="sessionNumber"
+                type="number"
+                min={1}
+                step={1}
+                required
+                defaultValue={session.sessionNumber}
+                className="w-24"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Another session in your club may already hold the number you pick, in which case this
+              is refused rather than creating two of the same.
+            </p>
+          </div>
+          <DialogFooter>
+            <SubmitButton pendingLabel="Saving…">Save number</SubmitButton>
+          </DialogFooter>
+        </ActionForm>
+      </DialogContent>
+    </Dialog>
+  );
+}

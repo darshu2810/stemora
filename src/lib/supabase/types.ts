@@ -387,9 +387,11 @@ export type Database = {
           p_location: string;
           p_end_time?: string | null;
           p_description?: string | null;
+          p_session_number?: number | null;
         };
         Returns: string;
       };
+      set_session_number: { Args: { p_event: string; p_number: number }; Returns: undefined };
       save_attendance: { Args: { p_event: string; p_entries: unknown }; Returns: number };
       next_session_number: { Args: Record<never, never>; Returns: number | null };
       promote_to_school_admin: { Args: { p_user: string }; Returns: undefined };

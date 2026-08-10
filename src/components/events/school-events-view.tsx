@@ -73,16 +73,25 @@ export function SchoolEventsView({
                 </div>
 
                 {isSession ? (
-                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Session number
-                    </p>
-                    <p className="mt-0.5 font-display text-lg font-semibold">
-                      {nextSessionNumber ? `Session ${nextSessionNumber}` : "Session 1"}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Numbered automatically by STEMORA, counting only this club. You can&apos;t edit
-                      it — that is what keeps the sequence honest.
+                  <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                    <Label htmlFor="sessionNumber">Session number</Label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Session</span>
+                      <Input
+                        id="sessionNumber"
+                        name="sessionNumber"
+                        type="number"
+                        min={1}
+                        step={1}
+                        required
+                        defaultValue={nextSessionNumber ?? 1}
+                        className="w-24"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Suggested from where your club got to. Change it if a session was created by
+                      mistake — the next one carries on from whatever you set here. Two sessions
+                      can&apos;t share a number.
                     </p>
                   </div>
                 ) : null}
