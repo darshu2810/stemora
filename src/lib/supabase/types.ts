@@ -27,7 +27,20 @@ export type TaskColumn = "backlog" | "todo" | "in_progress" | "in_review" | "don
 export type TaskPriority = "low" | "medium" | "high";
 export type CompetitionLevel = "School" | "Regional" | "National" | "International";
 export type CompetitionStatus = "upcoming" | "completed";
-export type EventType = "Meeting" | "Workshop" | "Competition" | "Showcase";
+// A Session is the club actually meeting to do STEM, and is the only kind that
+// keeps attendance. The other values are ordinary calendar entries.
+export type EventType =
+  | "Session"
+  | "Meeting"
+  | "Workshop"
+  | "Competition"
+  | "Showcase"
+  | "Guest Speaker"
+  | "Field Trip"
+  | "Social"
+  | "Other";
+
+export type AttendanceStatus = "present" | "absent" | "late" | "excused";
 export type ResourceType = "file" | "link";
 export type NotificationType =
   | "task_assigned"
@@ -185,8 +198,23 @@ type EventRow = {
   type: EventType;
   event_date: string;
   start_time: string;
+  end_time: string | null;
   location: string;
+  description: string | null;
+  /** Set by the database for Sessions, and null for every other type. */
+  session_number: number | null;
   created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type AttendanceRecordRow = {
+  id: string;
+  school_id: string;
+  event_id: string;
+  user_id: string;
+  status: AttendanceStatus;
+  marked_by: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -316,6 +344,7 @@ export type Database = {
       activity_logs: TableOf<ActivityLogRow>;
       events: TableOf<EventRow>;
       event_rsvps: TableOf<EventRsvpRow>;
+      attendance_records: TableOf<AttendanceRecordRow>;
       resources: TableOf<ResourceRow>;
       announcements: TableOf<AnnouncementRow>;
       badges: TableOf<BadgeRow>;
@@ -349,6 +378,20 @@ export type Database = {
         };
         Returns: string;
       };
+      create_club_event: {
+        Args: {
+          p_type: EventType;
+          p_title: string;
+          p_date: string;
+          p_start_time: string;
+          p_location: string;
+          p_end_time?: string | null;
+          p_description?: string | null;
+        };
+        Returns: string;
+      };
+      save_attendance: { Args: { p_event: string; p_entries: unknown }; Returns: number };
+      next_session_number: { Args: Record<never, never>; Returns: number | null };
       promote_to_school_admin: { Args: { p_user: string }; Returns: undefined };
       demote_school_admin: { Args: { p_user: string }; Returns: undefined };
       step_down_as_school_admin: { Args: Record<never, never>; Returns: undefined };
@@ -370,6 +413,7 @@ export type Database = {
       competition_level: CompetitionLevel;
       competition_status: CompetitionStatus;
       event_type: EventType;
+      attendance_status: AttendanceStatus;
       resource_type: ResourceType;
       notification_type: NotificationType;
     };

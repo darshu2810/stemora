@@ -629,31 +629,85 @@ export async function setCompetitionRoster(_prev: ActionResult | undefined, fd: 
 
 // --- Events -----------------------------------------------------------------
 
+/**
+ * Schedules a club event.
+ *
+ * Goes through `create_club_event` rather than inserting directly, because a
+ * Session's number has to be handed out by the database: two admins creating
+ * one at the same moment must not both read the same maximum, and a deleted
+ * session must not free its number for reuse. Everything else about the event
+ * is ordinary.
+ */
 export async function createEvent(_prev: ActionResult | undefined, fd: FormData): Promise<ActionResult> {
-  const session = await requireSchoolAdmin();
+  await requireSchoolAdmin();
   const supabase = await createClient();
 
+  const type = (str(fd, "type") || "Meeting") as EventType;
   const title = str(fd, "title");
   const date = str(fd, "date");
   const time = str(fd, "time");
   const location = str(fd, "location");
-  if (!title || !date || !time || !location) {
-    return fail("Title, date, time, and location are all needed.");
-  }
 
-  const { error } = await supabase.from("events").insert({
-    school_id: session.schoolId,
-    title,
-    type: (str(fd, "type") || "Meeting") as EventType,
-    event_date: date,
-    start_time: time,
-    location,
-    created_by: session.userId,
+  if (!date || !time || !location) return fail("Date, time, and location are all needed.");
+  // A session is identified by its number, so it can be scheduled before the
+  // topic is decided. Everything else needs a name to be recognisable.
+  if (type !== "Session" && !title) return fail("Give the event a title.");
+
+  const { error } = await supabase.rpc("create_club_event", {
+    p_type: type,
+    p_title: title,
+    p_date: date,
+    p_start_time: time,
+    p_location: location,
+    p_end_time: str(fd, "endTime") || null,
+    p_description: str(fd, "description") || null,
   });
 
   if (error) return fail(error.message);
   revalidatePath("/school/events");
   revalidatePath("/school/dashboard");
+  return ok;
+}
+
+/**
+ * Saves a whole session's attendance in one request.
+ *
+ * The form posts one field per student, so the roster arrives complete and is
+ * handed to the database as a single batch — no request per student, and no
+ * partial write if one name is wrong.
+ */
+export async function saveAttendance(
+  _prev: ActionResult | undefined,
+  fd: FormData,
+): Promise<ActionResult> {
+  await requireSchoolAdmin();
+  const eventId = str(fd, "eventId");
+  if (!eventId) return fail("That session is no longer on the calendar.");
+
+  const allowed = new Set(["present", "absent", "late", "excused"]);
+  const entries: { user_id: string; status: string }[] = [];
+
+  for (const [key, value] of fd.entries()) {
+    if (!key.startsWith("status:")) continue;
+    const status = String(value);
+    // Unmarked students are left alone rather than defaulted to anything.
+    if (status === "unmarked") continue;
+    if (!allowed.has(status)) return fail("That is not an attendance status.");
+    entries.push({ user_id: key.slice("status:".length), status });
+  }
+
+  if (entries.length === 0) return fail("Mark at least one student before saving.");
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("save_attendance", {
+    p_event: eventId,
+    p_entries: entries,
+  });
+
+  if (error) return fail(error.message);
+  revalidatePath("/school/events");
+  revalidatePath(`/school/events/${eventId}`);
+  revalidatePath("/student/events");
   return ok;
 }
 

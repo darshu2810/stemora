@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { initialsOf } from "@/lib/utils";
 import type {
   Announcement,
+  AttendanceStatus,
   Badge,
   Competition,
   MembershipStatus,
@@ -401,6 +402,191 @@ export async function listEvents(schoolId: string): Promise<StemEvent[]> {
     .eq("school_id", schoolId)
     .order("event_date", { ascending: true });
   return data ?? [];
+}
+
+// --- Sessions and attendance ------------------------------------------------
+
+/** How a session reads on the attendance history list. */
+export type SessionSummary = {
+  id: string;
+  sessionNumber: number;
+  topic: string;
+  date: string;
+  startTime: string;
+  present: number;
+  marked: number;
+  totalStudents: number;
+};
+
+/**
+ * Every session the club has held, with how many were there.
+ *
+ * Three queries regardless of how many sessions or students exist — the counts
+ * are folded in memory rather than asking the database once per session.
+ */
+export async function listSessions(schoolId: string): Promise<SessionSummary[]> {
+  const supabase = await createClient();
+
+  const [{ data: sessions }, { data: records }, { count: totalStudents }] = await Promise.all([
+    supabase
+      .from("events")
+      .select("id, title, event_date, start_time, session_number")
+      .eq("school_id", schoolId)
+      .eq("type", "Session")
+      .order("session_number", { ascending: false }),
+    supabase.from("attendance_records").select("event_id, status").eq("school_id", schoolId),
+    supabase
+      .from("school_members")
+      .select("id", { count: "exact", head: true })
+      .eq("school_id", schoolId)
+      .eq("role", "student")
+      .eq("status", "active"),
+  ]);
+
+  const byEvent = new Map<string, { present: number; marked: number }>();
+  for (const r of records ?? []) {
+    const bucket = byEvent.get(r.event_id) ?? { present: 0, marked: 0 };
+    bucket.marked += 1;
+    // Someone who arrived late was still there.
+    if (r.status === "present" || r.status === "late") bucket.present += 1;
+    byEvent.set(r.event_id, bucket);
+  }
+
+  return (sessions ?? []).map((s) => {
+    const bucket = byEvent.get(s.id) ?? { present: 0, marked: 0 };
+    return {
+      id: s.id,
+      sessionNumber: s.session_number ?? 0,
+      topic: s.title,
+      date: s.event_date,
+      startTime: s.start_time,
+      present: bucket.present,
+      marked: bucket.marked,
+      totalStudents: totalStudents ?? 0,
+    };
+  });
+}
+
+/** One student's line on the attendance sheet. */
+export type RosterEntry = {
+  userId: string;
+  name: string;
+  email: string;
+  grade: number | null;
+  status: AttendanceStatus | null;
+};
+
+export type SessionDetail = {
+  id: string;
+  sessionNumber: number;
+  topic: string;
+  date: string;
+  startTime: string;
+  endTime: string | null;
+  location: string;
+  description: string | null;
+  roster: RosterEntry[];
+};
+
+/**
+ * A session and the sheet for taking its attendance.
+ *
+ * The roster is every active student plus whatever has already been marked,
+ * fetched as two queries and joined in memory — never one request per student.
+ * `status: null` means nobody has been marked yet, which is deliberately
+ * different from being marked absent: opening the page records nothing.
+ */
+export async function getSessionDetail(
+  schoolId: string,
+  eventId: string,
+): Promise<SessionDetail | null> {
+  const supabase = await createClient();
+
+  const [{ data: event }, { data: members }, { data: records }] = await Promise.all([
+    supabase
+      .from("events")
+      .select("id, title, event_date, start_time, end_time, location, description, session_number, type")
+      .eq("school_id", schoolId)
+      .eq("id", eventId)
+      .maybeSingle(),
+    supabase
+      .from("school_members")
+      .select("grade, users(id, full_name, email)")
+      .eq("school_id", schoolId)
+      .eq("role", "student")
+      .eq("status", "active"),
+    supabase.from("attendance_records").select("user_id, status").eq("event_id", eventId),
+  ]);
+
+  if (!event || event.type !== "Session") return null;
+
+  const marked = new Map((records ?? []).map((r) => [r.user_id, r.status as AttendanceStatus]));
+
+  const roster: RosterEntry[] = (members ?? [])
+    .map((m) => {
+      const u = m.users as unknown as { id: string; full_name: string; email: string };
+      return {
+        userId: u.id,
+        name: u.full_name,
+        email: u.email,
+        grade: m.grade,
+        status: marked.get(u.id) ?? null,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return {
+    id: event.id,
+    sessionNumber: event.session_number ?? 0,
+    topic: event.title,
+    date: event.event_date,
+    startTime: event.start_time,
+    endTime: event.end_time,
+    location: event.location,
+    description: event.description,
+    roster,
+  };
+}
+
+/** A student's own attendance, newest session first. */
+export type OwnAttendance = {
+  eventId: string;
+  sessionNumber: number;
+  topic: string;
+  date: string;
+  status: AttendanceStatus | null;
+};
+
+/**
+ * One student's attendance history. RLS already limits this to their own
+ * school, and the filter on their own id keeps it to their own record — a
+ * student never sees who else was in or out.
+ */
+export async function attendanceForStudent(
+  schoolId: string,
+  userId: string,
+): Promise<OwnAttendance[]> {
+  const supabase = await createClient();
+
+  const [{ data: sessions }, { data: records }] = await Promise.all([
+    supabase
+      .from("events")
+      .select("id, title, event_date, session_number")
+      .eq("school_id", schoolId)
+      .eq("type", "Session")
+      .order("session_number", { ascending: false }),
+    supabase.from("attendance_records").select("event_id, status").eq("user_id", userId),
+  ]);
+
+  const mine = new Map((records ?? []).map((r) => [r.event_id, r.status as AttendanceStatus]));
+
+  return (sessions ?? []).map((s) => ({
+    eventId: s.id,
+    sessionNumber: s.session_number ?? 0,
+    topic: s.title,
+    date: s.event_date,
+    status: mine.get(s.id) ?? null,
+  }));
 }
 
 export type ResourceWithUploader = Resource & { uploaderName: string };
