@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/config/roles";
@@ -22,27 +23,39 @@ export type Session = {
  * The signed-in user, their role, and the school they belong to — or null if
  * there is no session. Every dashboard page starts here, and the role it
  * returns comes from the database, never from anything the client can set.
+ *
+ * Wrapped in React's `cache`, which memoises per *request* and not beyond it.
+ * A layout and the page inside it both call this — deliberately, since each is
+ * its own authorization boundary — and without the memo that was three
+ * duplicate round trips on every navigation. Nothing is shared between
+ * requests, so a role or membership change still takes effect on the very next
+ * one: this removes repeated work, not the check.
  */
-export async function getSession(): Promise<Session | null> {
+export const getSession = cache(async function getSession(): Promise<Session | null> {
   const supabase = await createClient();
 
+  // Validates the JWT against the Auth server. Kept as its own call precisely
+  // because everything below has to be scoped to a user id we have proven.
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return null;
 
-  const { data: profile } = await supabase
-    .from("users")
-    .select("id, email, full_name, platform_role")
-    .eq("id", auth.user.id)
-    .maybeSingle();
+  // Both of these need only the id above, and neither needs the other, so they
+  // go together rather than one after the same round trip twice.
+  const [{ data: profile }, { data: membership }] = await Promise.all([
+    supabase
+      .from("users")
+      .select("id, email, full_name, platform_role")
+      .eq("id", auth.user.id)
+      .maybeSingle(),
+    supabase
+      .from("school_members")
+      .select("role, grade, school_id, schools(id, name, club_name, district)")
+      .eq("user_id", auth.user.id)
+      .eq("status", "active")
+      .maybeSingle(),
+  ]);
 
   if (!profile) return null;
-
-  const { data: membership } = await supabase
-    .from("school_members")
-    .select("role, grade, school_id, schools(id, name, club_name, district)")
-    .eq("user_id", auth.user.id)
-    .eq("status", "active")
-    .maybeSingle();
 
   // Platform Owner outranks any school membership; they answer to no school.
   if (profile.platform_role === "platform_owner") {
@@ -79,7 +92,7 @@ export async function getSession(): Promise<Session | null> {
     district: school?.district ?? null,
     grade: membership.grade,
   };
-}
+});
 
 /** A signed-in applicant's standing, for the waitlist page and for routing. */
 export type ApplicationStanding = {
